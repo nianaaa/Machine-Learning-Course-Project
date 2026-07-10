@@ -1,0 +1,70 @@
+Using device: cuda
+lstm horizon=90 seed=42 epoch=1/30 train_mse_norm=0.90969
+lstm horizon=90 seed=42 epoch=30/30 train_mse_norm=0.33736
+lstm horizon=90 seed=43 epoch=1/30 train_mse_norm=0.84379
+lstm horizon=90 seed=43 epoch=30/30 train_mse_norm=0.33214
+lstm horizon=90 seed=44 epoch=1/30 train_mse_norm=0.87311
+lstm horizon=90 seed=44 epoch=30/30 train_mse_norm=0.33264
+lstm horizon=90 seed=45 epoch=1/30 train_mse_norm=0.90115
+lstm horizon=90 seed=45 epoch=30/30 train_mse_norm=0.33962
+lstm horizon=90 seed=46 epoch=1/30 train_mse_norm=0.87101
+lstm horizon=90 seed=46 epoch=30/30 train_mse_norm=0.34421
+transformer horizon=90 seed=42 epoch=1/30 train_mse_norm=0.86546
+transformer horizon=90 seed=42 epoch=30/30 train_mse_norm=0.33043
+transformer horizon=90 seed=43 epoch=1/30 train_mse_norm=0.84786
+transformer horizon=90 seed=43 epoch=30/30 train_mse_norm=0.32893
+transformer horizon=90 seed=44 epoch=1/30 train_mse_norm=0.82003
+transformer horizon=90 seed=44 epoch=30/30 train_mse_norm=0.33013
+transformer horizon=90 seed=45 epoch=1/30 train_mse_norm=0.80687
+transformer horizon=90 seed=45 epoch=30/30 train_mse_norm=0.33304
+transformer horizon=90 seed=46 epoch=1/30 train_mse_norm=0.86883
+transformer horizon=90 seed=46 epoch=30/30 train_mse_norm=0.33142
+pvg_itransformer horizon=90 seed=42 epoch=1/30 train_mse_norm=0.71465
+pvg_itransformer horizon=90 seed=42 epoch=30/30 train_mse_norm=0.32233
+pvg_itransformer horizon=90 seed=43 epoch=1/30 train_mse_norm=0.72463
+pvg_itransformer horizon=90 seed=43 epoch=30/30 train_mse_norm=0.31601
+pvg_itransformer horizon=90 seed=44 epoch=1/30 train_mse_norm=0.70345
+pvg_itransformer horizon=90 seed=44 epoch=30/30 train_mse_norm=0.31719
+pvg_itransformer horizon=90 seed=45 epoch=1/30 train_mse_norm=0.71253
+pvg_itransformer horizon=90 seed=45 epoch=30/30 train_mse_norm=0.32314
+pvg_itransformer horizon=90 seed=46 epoch=1/30 train_mse_norm=0.72352
+pvg_itransformer horizon=90 seed=46 epoch=30/30 train_mse_norm=0.31649
+lstm horizon=365 seed=42 epoch=1/30 train_mse_norm=1.05224
+lstm horizon=365 seed=42 epoch=30/30 train_mse_norm=0.41815
+lstm horizon=365 seed=43 epoch=1/30 train_mse_norm=1.03105
+lstm horizon=365 seed=43 epoch=30/30 train_mse_norm=0.41945
+lstm horizon=365 seed=44 epoch=1/30 train_mse_norm=1.05127
+lstm horizon=365 seed=44 epoch=30/30 train_mse_norm=0.41791
+lstm horizon=365 seed=45 epoch=1/30 train_mse_norm=1.04805
+lstm horizon=365 seed=45 epoch=30/30 train_mse_norm=0.42146
+lstm horizon=365 seed=46 epoch=1/30 train_mse_norm=1.04680
+lstm horizon=365 seed=46 epoch=30/30 train_mse_norm=0.42137
+transformer horizon=365 seed=42 epoch=1/30 train_mse_norm=1.01914
+transformer horizon=365 seed=42 epoch=30/30 train_mse_norm=0.42127
+transformer horizon=365 seed=43 epoch=1/30 train_mse_norm=0.99081
+transformer horizon=365 seed=43 epoch=30/30 train_mse_norm=0.42165
+transformer horizon=365 seed=44 epoch=1/30 train_mse_norm=0.99576
+transformer horizon=365 seed=44 epoch=30/30 train_mse_norm=0.41724
+transformer horizon=365 seed=45 epoch=1/30 train_mse_norm=0.99658
+transformer horizon=365 seed=45 epoch=30/30 train_mse_norm=0.42492
+transformer horizon=365 seed=46 epoch=1/30 train_mse_norm=1.00130
+transformer horizon=365 seed=46 epoch=30/30 train_mse_norm=0.42242
+pvg_itransformer horizon=365 seed=42 epoch=1/30 train_mse_norm=0.83210
+pvg_itransformer horizon=365 seed=42 epoch=30/30 train_mse_norm=0.40991
+pvg_itransformer horizon=365 seed=43 epoch=1/30 train_mse_norm=0.84226
+pvg_itransformer horizon=365 seed=43 epoch=30/30 train_mse_norm=0.41472
+pvg_itransformer horizon=365 seed=44 epoch=1/30 train_mse_norm=0.84436
+pvg_itransformer horizon=365 seed=44 epoch=30/30 train_mse_norm=0.40979
+pvg_itransformer horizon=365 seed=45 epoch=1/30 train_mse_norm=0.84386
+pvg_itransformer horizon=365 seed=45 epoch=30/30 train_mse_norm=0.40188
+pvg_itransformer horizon=365 seed=46 epoch=1/30 train_mse_norm=0.84747
+pvg_itransformer horizon=365 seed=46 epoch=30/30 train_mse_norm=0.41400
+
+Summary:
+           model  horizon      mse_mean      mse_std   mae_mean   mae_std  runs  train_windows  test_windows
+            lstm       90 223008.084375  9144.515931 363.410449  6.778520     5            757           415
+     transformer       90 199242.396875 26144.480042 347.253143 21.001020     5            757           415
+pvg_itransformer       90 158417.609375  8465.357184 306.670508  8.359623     5            757           415
+            lstm      365 178906.303125  5968.404612 331.867438  4.655248     5            482           140
+     transformer      365 212223.640625 10390.705743 365.190735 10.455243     5            482           140
+pvg_itransformer      365 171061.693750  8067.709532 322.156097  7.421602     5            482           140

@@ -1,0 +1,76 @@
+Using device: cuda
+pvg_no_time horizon=90 seed=42 epoch=1/30 train_mse_norm=0.78663
+pvg_no_time horizon=90 seed=42 epoch=30/30 train_mse_norm=0.34242
+pvg_no_time horizon=90 seed=43 epoch=1/30 train_mse_norm=0.80772
+pvg_no_time horizon=90 seed=43 epoch=30/30 train_mse_norm=0.34237
+pvg_no_time horizon=90 seed=44 epoch=1/30 train_mse_norm=0.78196
+pvg_no_time horizon=90 seed=44 epoch=30/30 train_mse_norm=0.34082
+pvg_no_time horizon=90 seed=45 epoch=1/30 train_mse_norm=0.78362
+pvg_no_time horizon=90 seed=45 epoch=30/30 train_mse_norm=0.34365
+pvg_no_time horizon=90 seed=46 epoch=1/30 train_mse_norm=0.78905
+pvg_no_time horizon=90 seed=46 epoch=30/30 train_mse_norm=0.34109
+pvg_no_variable horizon=90 seed=42 epoch=1/30 train_mse_norm=0.69668
+pvg_no_variable horizon=90 seed=42 epoch=30/30 train_mse_norm=0.38844
+pvg_no_variable horizon=90 seed=43 epoch=1/30 train_mse_norm=0.70825
+pvg_no_variable horizon=90 seed=43 epoch=30/30 train_mse_norm=0.38627
+pvg_no_variable horizon=90 seed=44 epoch=1/30 train_mse_norm=0.69741
+pvg_no_variable horizon=90 seed=44 epoch=30/30 train_mse_norm=0.37826
+pvg_no_variable horizon=90 seed=45 epoch=1/30 train_mse_norm=0.69547
+pvg_no_variable horizon=90 seed=45 epoch=30/30 train_mse_norm=0.38988
+pvg_no_variable horizon=90 seed=46 epoch=1/30 train_mse_norm=0.69748
+pvg_no_variable horizon=90 seed=46 epoch=30/30 train_mse_norm=0.37943
+pvg_no_gate horizon=90 seed=42 epoch=1/30 train_mse_norm=0.72595
+pvg_no_gate horizon=90 seed=42 epoch=30/30 train_mse_norm=0.32557
+pvg_no_gate horizon=90 seed=43 epoch=1/30 train_mse_norm=0.73286
+pvg_no_gate horizon=90 seed=43 epoch=30/30 train_mse_norm=0.32180
+pvg_no_gate horizon=90 seed=44 epoch=1/30 train_mse_norm=0.70756
+pvg_no_gate horizon=90 seed=44 epoch=30/30 train_mse_norm=0.32376
+pvg_no_gate horizon=90 seed=45 epoch=1/30 train_mse_norm=0.71690
+pvg_no_gate horizon=90 seed=45 epoch=30/30 train_mse_norm=0.32905
+pvg_no_gate horizon=90 seed=46 epoch=1/30 train_mse_norm=0.73504
+pvg_no_gate horizon=90 seed=46 epoch=30/30 train_mse_norm=0.32253
+pvg_no_time horizon=365 seed=42 epoch=1/30 train_mse_norm=0.87008
+pvg_no_time horizon=365 seed=42 epoch=30/30 train_mse_norm=0.43209
+pvg_no_time horizon=365 seed=43 epoch=1/30 train_mse_norm=0.87991
+pvg_no_time horizon=365 seed=43 epoch=30/30 train_mse_norm=0.44307
+pvg_no_time horizon=365 seed=44 epoch=1/30 train_mse_norm=0.87127
+pvg_no_time horizon=365 seed=44 epoch=30/30 train_mse_norm=0.42839
+pvg_no_time horizon=365 seed=45 epoch=1/30 train_mse_norm=0.87323
+pvg_no_time horizon=365 seed=45 epoch=30/30 train_mse_norm=0.42513
+pvg_no_time horizon=365 seed=46 epoch=1/30 train_mse_norm=0.87908
+pvg_no_time horizon=365 seed=46 epoch=30/30 train_mse_norm=0.43124
+pvg_no_variable horizon=365 seed=42 epoch=1/30 train_mse_norm=0.82105
+pvg_no_variable horizon=365 seed=42 epoch=30/30 train_mse_norm=0.44516
+pvg_no_variable horizon=365 seed=43 epoch=1/30 train_mse_norm=0.82420
+pvg_no_variable horizon=365 seed=43 epoch=30/30 train_mse_norm=0.44116
+pvg_no_variable horizon=365 seed=44 epoch=1/30 train_mse_norm=0.82952
+pvg_no_variable horizon=365 seed=44 epoch=30/30 train_mse_norm=0.44462
+pvg_no_variable horizon=365 seed=45 epoch=1/30 train_mse_norm=0.83610
+pvg_no_variable horizon=365 seed=45 epoch=30/30 train_mse_norm=0.43985
+pvg_no_variable horizon=365 seed=46 epoch=1/30 train_mse_norm=0.83109
+pvg_no_variable horizon=365 seed=46 epoch=30/30 train_mse_norm=0.44313
+pvg_no_gate horizon=365 seed=42 epoch=1/30 train_mse_norm=0.83698
+pvg_no_gate horizon=365 seed=42 epoch=30/30 train_mse_norm=0.41351
+pvg_no_gate horizon=365 seed=43 epoch=1/30 train_mse_norm=0.84397
+pvg_no_gate horizon=365 seed=43 epoch=30/30 train_mse_norm=0.41305
+pvg_no_gate horizon=365 seed=44 epoch=1/30 train_mse_norm=0.84484
+pvg_no_gate horizon=365 seed=44 epoch=30/30 train_mse_norm=0.41024
+pvg_no_gate horizon=365 seed=45 epoch=1/30 train_mse_norm=0.84567
+pvg_no_gate horizon=365 seed=45 epoch=30/30 train_mse_norm=0.40612
+pvg_no_gate horizon=365 seed=46 epoch=1/30 train_mse_norm=0.85217
+pvg_no_gate horizon=365 seed=46 epoch=30/30 train_mse_norm=0.41476
+
+Summary:
+           model  horizon      mse_mean      mse_std   mae_mean   mae_std  runs  train_windows  test_windows
+            lstm       90 223008.084375  9144.515931 363.410449  6.778520     5            757           415
+     transformer       90 199242.396875 26144.480042 347.253143 21.001020     5            757           415
+pvg_itransformer       90 158417.609375  8465.357184 306.670508  8.359623     5            757           415
+     pvg_no_time       90 151969.093750  5200.905897 300.904077  8.121636     5            757           415
+ pvg_no_variable       90 169661.531250  8063.327997 319.599396  7.387042     5            757           415
+     pvg_no_gate       90 158172.000000  4903.707780 307.565717  5.359638     5            757           415
+            lstm      365 178906.303125  5968.404612 331.867438  4.655248     5            482           140
+     transformer      365 212223.640625 10390.705743 365.190735 10.455243     5            482           140
+pvg_itransformer      365 171061.693750  8067.709532 322.156097  7.421602     5            482           140
+     pvg_no_time      365 158587.356250  9446.710983 306.030176  9.483202     5            482           140
+ pvg_no_variable      365 202247.431250 13071.902800 352.085724 11.775962     5            482           140
+     pvg_no_gate      365 174182.503125  9143.130379 324.930206  8.753073     5            482           140
