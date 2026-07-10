@@ -7,3 +7,8 @@ __pycache__/
 Thumbs.db
 data/raw/
 reports/render*/
+.cache/
+tmp/
+conda_pkgs/
+runs/*/checkpoints/
+runs/*/logs/

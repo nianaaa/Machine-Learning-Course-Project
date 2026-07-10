@@ -54,6 +54,7 @@ def configure_environment(base: Path) -> None:
     os.environ.setdefault("PIP_CACHE_DIR", str(base / ".cache" / "pip"))
     os.environ.setdefault("XDG_CACHE_HOME", str(base / ".cache"))
     os.environ.setdefault("PYTHONNOUSERSITE", "1")
+    os.environ.setdefault("CUBLAS_WORKSPACE_CONFIG", ":4096:8")
     for p in [
         base / "tmp",
         base / "conda_pkgs",
@@ -68,8 +69,13 @@ def seed_everything(seed: int) -> None:
     np.random.seed(seed)
     torch.manual_seed(seed)
     torch.cuda.manual_seed_all(seed)
-    torch.backends.cudnn.deterministic = False
-    torch.backends.cudnn.benchmark = True
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    torch.use_deterministic_algorithms(True)
+    if torch.cuda.is_available():
+        torch.backends.cuda.enable_flash_sdp(False)
+        torch.backends.cuda.enable_mem_efficient_sdp(False)
+        torch.backends.cuda.enable_math_sdp(True)
 
 
 def model_display_name(name: str) -> str:
@@ -150,23 +156,41 @@ def build_weather_monthly(weather_path: Path, out_dir: Path, month_ids: list[int
     return monthly
 
 
-def impute_minute_power(df: pd.DataFrame, numeric_cols: list[str]) -> dict:
-    offsets = [7, -7, 14, -14, 21, -21, 28, -28]
+def impute_minute_power(
+    df: pd.DataFrame,
+    numeric_cols: list[str],
+) -> tuple[dict, pd.DataFrame]:
+    """Fill minute gaps using original observations strictly from the past.
+
+    The primary donor set is the same minute of day at t-7/-14/-21/-28 days,
+    restricted to the same calendar month to retain the original coursework
+    preprocessing intent. If none of those raw observations exists, the most
+    recent raw observation is used as a short causal forward-fill fallback.
+    Filled values are never reused as donors.
+    """
+    offsets = [-28, -21, -14, -7]
     index = df.index
+    original = df[numeric_cols].copy()
     summary: dict[str, dict] = {}
+    audit_frames: list[pd.DataFrame] = []
 
     for col in numeric_cols:
-        missing = df[col].isna().to_numpy()
+        original_col = original[col]
+        missing = original_col.isna().to_numpy()
         candidates = []
+        candidate_times = []
         for days in offsets:
             candidate_index = index + pd.Timedelta(days=days)
-            candidate = df[col].reindex(candidate_index).to_numpy(dtype=np.float64)
+            candidate = original_col.reindex(candidate_index).to_numpy(dtype=np.float64)
             same_month = (
                 (candidate_index.year == index.year)
                 & (candidate_index.month == index.month)
             )
             candidate[~same_month] = np.nan
             candidates.append(candidate)
+            times = candidate_index.to_numpy(dtype="datetime64[ns]")
+            times[~same_month] = np.datetime64("NaT")
+            candidate_times.append(times)
 
         stacked = np.vstack(candidates)
         available_counts = np.sum(~np.isnan(stacked), axis=0)
@@ -177,21 +201,67 @@ def impute_minute_power(df: pd.DataFrame, numeric_cols: list[str]) -> dict:
             out=fill_values,
             where=available_counts > 0,
         )
+
+        latest_donor_time = np.full(len(index), np.datetime64("NaT"), dtype="datetime64[ns]")
+        for candidate, times in zip(candidates, candidate_times):
+            valid = ~np.isnan(candidate)
+            latest_donor_time[valid] = times[valid]
+
+        weekly_fill = missing & (available_counts > 0)
+        fallback_fill = missing & (available_counts == 0)
+        if fallback_fill.any():
+            fallback_values = original_col.ffill().to_numpy(dtype=np.float64)
+            observed_times = pd.Series(pd.NaT, index=index, dtype="datetime64[ns]")
+            observed = original_col.notna().to_numpy()
+            observed_times.iloc[np.flatnonzero(observed)] = index[observed].to_numpy()
+            fallback_times = observed_times.ffill().to_numpy(dtype="datetime64[ns]")
+            if np.isnan(fallback_values[fallback_fill]).any() or pd.isna(
+                fallback_times[fallback_fill]
+            ).any():
+                bad_times = index[fallback_fill & np.isnan(fallback_values)]
+                raise RuntimeError(
+                    f"{col} has missing minutes without any earlier raw observation: "
+                    f"{bad_times[:10].astype(str).tolist()}"
+                )
+            fill_values[fallback_fill] = fallback_values[fallback_fill]
+            latest_donor_time[fallback_fill] = fallback_times[fallback_fill]
+
         if np.isnan(fill_values[missing]).any():
-            bad_times = index[missing & np.isnan(fill_values)]
-            raise RuntimeError(
-                f"{col} has missing minutes without same-month weekly neighbors: "
-                f"{bad_times[:10].astype(str).tolist()}"
-            )
+            raise RuntimeError(f"Causal imputation left unresolved values in {col}")
+
+        value_times = index[missing].to_numpy(dtype="datetime64[ns]")
+        donor_times = latest_donor_time[missing]
+        if pd.isna(donor_times).any() or np.any(donor_times >= value_times):
+            raise AssertionError(f"Non-causal donor detected while imputing {col}")
+
         df.loc[df.index[missing], col] = fill_values[missing]
+        methods = np.where(weekly_fill[missing], "past_weekly_mean", "past_forward_fill")
+        donor_counts = np.where(weekly_fill[missing], available_counts[missing], 1)
+        lag_minutes = (value_times - donor_times) / np.timedelta64(1, "m")
+        audit_frames.append(
+            pd.DataFrame(
+                {
+                    "variable": col,
+                    "value_time": pd.to_datetime(value_times),
+                    "latest_donor_time": pd.to_datetime(donor_times),
+                    "method": methods,
+                    "donor_count": donor_counts.astype(int),
+                    "latest_donor_lag_minutes": lag_minutes.astype(float),
+                }
+            )
+        )
         summary[col] = {
             "missing_minutes": int(missing.sum()),
+            "weekly_mean_minutes": int(weekly_fill.sum()),
+            "forward_fill_minutes": int(fallback_fill.sum()),
             "min_candidates": int(available_counts[missing].min()) if missing.any() else 0,
             "max_candidates": int(available_counts[missing].max()) if missing.any() else 0,
             "mean_candidates": float(available_counts[missing].mean()) if missing.any() else 0.0,
+            "max_donor_lag_minutes": float(lag_minutes.max()) if missing.any() else 0.0,
         }
 
-    return summary
+    audit = pd.concat(audit_frames, ignore_index=True) if audit_frames else pd.DataFrame()
+    return summary, audit
 
 
 def build_daily_frame(
@@ -199,14 +269,24 @@ def build_daily_frame(
     weather_path: Path,
     out_dir: Path,
     split_ratio: float,
+    validation_days: int,
     rebuild: bool = False,
 ) -> pd.DataFrame:
     out_dir.mkdir(parents=True, exist_ok=True)
     daily_path = out_dir / "daily_power.csv"
     train_path = out_dir / "train.csv"
+    validation_path = out_dir / "validation.csv"
     test_path = out_dir / "test.csv"
     tes_path = out_dir / "tes.csv"
-    if not rebuild and daily_path.exists() and train_path.exists() and tes_path.exists():
+    audit_path = out_dir / "minute_imputation_audit.csv.gz"
+    if (
+        not rebuild
+        and daily_path.exists()
+        and train_path.exists()
+        and validation_path.exists()
+        and tes_path.exists()
+        and audit_path.exists()
+    ):
         cached = pd.read_csv(daily_path, parse_dates=["date"])
         if all(col in cached.columns for col in WEATHER_COLS) and "NBJBROU" not in cached.columns:
             return cached
@@ -234,10 +314,11 @@ def build_daily_frame(
         df[col] = pd.to_numeric(df[col], errors="coerce")
 
     df = df.set_index("datetime").sort_index().asfreq("1min")
-    imputation_summary = impute_minute_power(df, numeric_cols)
+    imputation_summary, imputation_audit = impute_minute_power(df, numeric_cols)
     imputation_df = pd.DataFrame.from_dict(imputation_summary, orient="index")
     imputation_df.index.name = "variable"
     imputation_df.reset_index().to_csv(out_dir / "minute_imputation_summary.csv", index=False)
+    imputation_audit.to_csv(audit_path, index=False, compression="gzip")
 
     df["Sub_metering_remainder"] = (
         df["Global_active_power"] * 1000.0 / 60.0
@@ -278,11 +359,34 @@ def build_daily_frame(
         raise RuntimeError("Daily frame has missing weather values after SURESNES merge")
     daily = daily.drop(columns=["AAAAMM"])
 
-    split_idx = int(len(daily) * split_ratio)
+    test_start_idx = int(len(daily) * split_ratio)
+    train_end_idx = test_start_idx - validation_days
+    if train_end_idx <= 0:
+        raise ValueError(
+            f"validation_days={validation_days} leaves no training rows before "
+            f"test_start_idx={test_start_idx}"
+        )
     daily.to_csv(daily_path, index=False)
-    daily.iloc[:split_idx].to_csv(train_path, index=False)
-    daily.iloc[split_idx:].to_csv(test_path, index=False)
-    daily.iloc[split_idx:].to_csv(tes_path, index=False)
+    daily.iloc[:train_end_idx].to_csv(train_path, index=False)
+    daily.iloc[train_end_idx:test_start_idx].to_csv(validation_path, index=False)
+    daily.iloc[test_start_idx:].to_csv(test_path, index=False)
+    daily.iloc[test_start_idx:].to_csv(tes_path, index=False)
+    split_manifest = {
+        "strategy": "chronological_self_split",
+        "split_ratio_train_plus_validation": split_ratio,
+        "validation_days": validation_days,
+        "train_rows": int(train_end_idx),
+        "validation_rows": int(test_start_idx - train_end_idx),
+        "test_rows": int(len(daily) - test_start_idx),
+        "train_start": str(daily["date"].iloc[0].date()),
+        "train_end": str(daily["date"].iloc[train_end_idx - 1].date()),
+        "validation_start": str(daily["date"].iloc[train_end_idx].date()),
+        "validation_end": str(daily["date"].iloc[test_start_idx - 1].date()),
+        "test_start": str(daily["date"].iloc[test_start_idx].date()),
+        "test_end": str(daily["date"].iloc[-1].date()),
+    }
+    with (out_dir / "split_manifest.json").open("w", encoding="utf-8") as f:
+        json.dump(split_manifest, f, ensure_ascii=False, indent=2)
     return daily
 
 
@@ -317,7 +421,8 @@ def make_windows(
     input_len: int,
     output_len: int,
     split_ratio: float,
-) -> tuple[WindowDataset, WindowDataset, dict]:
+    validation_days: int,
+) -> tuple[WindowDataset, WindowDataset, dict[str, WindowDataset], dict]:
     feature_cols = [
         "Global_active_power",
         "Global_reactive_power",
@@ -336,12 +441,22 @@ def make_windows(
     target_col = "Global_active_power"
     values = daily[feature_cols].to_numpy(dtype=np.float32)
     target = daily[target_col].to_numpy(dtype=np.float32)
-    split_idx = int(len(daily) * split_ratio)
+    test_start_idx = int(len(daily) * split_ratio)
+    train_end_idx = test_start_idx - validation_days
+    if validation_days < output_len:
+        raise ValueError(
+            f"validation_days={validation_days} must be at least horizon={output_len}"
+        )
+    if train_end_idx < input_len + output_len:
+        raise ValueError(
+            f"Training segment is too short for input_len={input_len}, "
+            f"horizon={output_len}: train_rows={train_end_idx}"
+        )
 
-    feat_mean = values[:split_idx].mean(axis=0, keepdims=True)
-    feat_std = values[:split_idx].std(axis=0, keepdims=True) + 1.0e-6
-    target_mean = float(target[:split_idx].mean())
-    target_std = float(target[:split_idx].std() + 1.0e-6)
+    feat_mean = values[:train_end_idx].mean(axis=0, keepdims=True)
+    feat_std = values[:train_end_idx].std(axis=0, keepdims=True) + 1.0e-6
+    target_mean = float(target[:train_end_idx].mean())
+    target_std = float(target[:train_end_idx].std() + 1.0e-6)
 
     values_norm = (values - feat_mean) / feat_std
     target_norm = (target - target_mean) / target_std
@@ -350,28 +465,69 @@ def make_windows(
     all_starts = np.arange(max_start, dtype=np.int64)
     out_start = all_starts + input_len
     out_end = out_start + output_len
-    train_starts = all_starts[out_end <= split_idx]
-    test_starts = all_starts[out_start >= split_idx]
-    if len(train_starts) == 0 or len(test_starts) == 0:
+    train_starts = all_starts[out_end <= train_end_idx]
+    validation_starts = all_starts[
+        (out_start >= train_end_idx) & (out_end <= test_start_idx)
+    ]
+    fixed_holdout_starts = all_starts[out_start == test_start_idx]
+    rolling_origin_starts = all_starts[out_start >= test_start_idx]
+    if (
+        len(train_starts) == 0
+        or len(validation_starts) == 0
+        or len(fixed_holdout_starts) != 1
+        or len(rolling_origin_starts) == 0
+    ):
         raise RuntimeError(
             f"Not enough windows for output_len={output_len}: "
-            f"train={len(train_starts)}, test={len(test_starts)}"
+            f"train={len(train_starts)}, validation={len(validation_starts)}, "
+            f"fixed={len(fixed_holdout_starts)}, rolling={len(rolling_origin_starts)}"
         )
 
     train = WindowDataset(values_norm, target_norm, train_starts, input_len, output_len)
-    test = WindowDataset(values_norm, target_norm, test_starts, input_len, output_len)
+    validation = WindowDataset(
+        values_norm,
+        target_norm,
+        validation_starts,
+        input_len,
+        output_len,
+    )
+    test_sets = {
+        "fixed_holdout": WindowDataset(
+            values_norm,
+            target_norm,
+            fixed_holdout_starts,
+            input_len,
+            output_len,
+        ),
+        "rolling_origin": WindowDataset(
+            values_norm,
+            target_norm,
+            rolling_origin_starts,
+            input_len,
+            output_len,
+        ),
+    }
+    dates = pd.to_datetime(daily["date"])
     meta = {
         "feature_cols": feature_cols,
         "target_col": target_col,
         "target_mean": target_mean,
         "target_std": target_std,
-        "split_idx": split_idx,
+        "train_end_idx": train_end_idx,
+        "test_start_idx": test_start_idx,
         "train_windows": int(len(train_starts)),
-        "test_windows": int(len(test_starts)),
-        "date_start": str(daily["date"].iloc[0].date()),
-        "date_end": str(daily["date"].iloc[-1].date()),
+        "validation_windows": int(len(validation_starts)),
+        "fixed_holdout_windows": int(len(fixed_holdout_starts)),
+        "rolling_origin_windows": int(len(rolling_origin_starts)),
+        "train_date_start": str(dates.iloc[0].date()),
+        "train_date_end": str(dates.iloc[train_end_idx - 1].date()),
+        "validation_date_start": str(dates.iloc[train_end_idx].date()),
+        "validation_date_end": str(dates.iloc[test_start_idx - 1].date()),
+        "test_date_start": str(dates.iloc[test_start_idx].date()),
+        "test_date_end": str(dates.iloc[-1].date()),
+        "scaler_fit_end": str(dates.iloc[train_end_idx - 1].date()),
     }
-    return train, test, meta
+    return train, validation, test_sets, meta
 
 
 class LSTMForecaster(nn.Module):
@@ -632,13 +788,15 @@ def build_model(
 def train_one(
     cfg: TrainConfig,
     train_ds: WindowDataset,
-    test_ds: WindowDataset,
+    validation_ds: WindowDataset,
+    test_sets: dict[str, WindowDataset],
     input_dim: int,
     feature_cols: list[str],
     target_mean: float,
     target_std: float,
     device: torch.device,
-) -> tuple[dict, np.ndarray, np.ndarray]:
+    checkpoint_path: Path,
+) -> tuple[list[dict], dict[str, tuple[np.ndarray, np.ndarray]]]:
     seed_everything(cfg.seed)
     generator = torch.Generator().manual_seed(cfg.seed)
     train_loader = DataLoader(
@@ -648,8 +806,8 @@ def train_one(
         generator=generator,
         drop_last=False,
     )
-    test_loader = DataLoader(
-        test_ds,
+    validation_loader = DataLoader(
+        validation_ds,
         batch_size=cfg.batch_size,
         shuffle=False,
         drop_last=False,
@@ -664,7 +822,9 @@ def train_one(
     opt = torch.optim.AdamW(model.parameters(), lr=cfg.lr, weight_decay=1.0e-4)
     loss_fn = nn.MSELoss()
     best_state = None
-    best_loss = float("inf")
+    best_val_loss = float("inf")
+    best_epoch = 0
+    final_train_loss = float("nan")
 
     for epoch in range(1, cfg.epochs + 1):
         model.train()
@@ -682,41 +842,88 @@ def train_one(
             total += float(loss.item()) * len(x)
             seen += len(x)
         train_loss = total / max(seen, 1)
-        if train_loss < best_loss:
-            best_loss = train_loss
+
+        model.eval()
+        val_total = 0.0
+        val_seen = 0
+        with torch.inference_mode():
+            for x, y in validation_loader:
+                x = x.to(device)
+                y = y.to(device)
+                pred = model(x)
+                val_loss = loss_fn(pred, y)
+                val_total += float(val_loss.item()) * len(x)
+                val_seen += len(x)
+        validation_loss = val_total / max(val_seen, 1)
+        final_train_loss = train_loss
+        if validation_loss < best_val_loss:
+            best_val_loss = validation_loss
+            best_epoch = epoch
             best_state = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
-        if epoch in {1, cfg.epochs}:
+        if epoch == 1 or epoch % 10 == 0 or epoch == cfg.epochs:
             print(
                 f"{cfg.model_name} horizon={cfg.horizon} seed={cfg.seed} "
-                f"epoch={epoch}/{cfg.epochs} train_mse_norm={train_loss:.5f}"
+                f"epoch={epoch}/{cfg.epochs} train_mse_norm={train_loss:.5f} "
+                f"validation_mse_norm={validation_loss:.5f}"
             )
 
-    if best_state is not None:
-        model.load_state_dict(best_state)
+    if best_state is None:
+        raise RuntimeError("Training did not produce a validation checkpoint")
+    model.load_state_dict(best_state)
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    torch.save(
+        {
+            "model_state_dict": best_state,
+            "config": asdict(cfg),
+            "best_epoch": best_epoch,
+            "best_validation_mse_norm": best_val_loss,
+            "feature_cols": feature_cols,
+            "target_mean": target_mean,
+            "target_std": target_std,
+        },
+        checkpoint_path,
+    )
     model.eval()
-    preds = []
-    trues = []
-    with torch.inference_mode():
-        for x, y in test_loader:
-            x = x.to(device)
-            pred = model(x).cpu().numpy()
-            preds.append(pred)
-            trues.append(y.numpy())
-    pred_norm = np.concatenate(preds, axis=0)
-    true_norm = np.concatenate(trues, axis=0)
-    pred = pred_norm * target_std + target_mean
-    true = true_norm * target_std + target_mean
-    mse = mean_squared_error(true.reshape(-1), pred.reshape(-1))
-    mae = mean_absolute_error(true.reshape(-1), pred.reshape(-1))
-    result = {
-        **asdict(cfg),
-        "test_mse": float(mse),
-        "test_mae": float(mae),
-        "best_train_mse_norm": float(best_loss),
-        "test_windows": int(len(test_ds)),
-        "train_windows": int(len(train_ds)),
-    }
-    return result, pred, true
+    results: list[dict] = []
+    predictions: dict[str, tuple[np.ndarray, np.ndarray]] = {}
+    for protocol, test_ds in test_sets.items():
+        test_loader = DataLoader(
+            test_ds,
+            batch_size=cfg.batch_size,
+            shuffle=False,
+            drop_last=False,
+        )
+        preds = []
+        trues = []
+        with torch.inference_mode():
+            for x, y in test_loader:
+                x = x.to(device)
+                pred = model(x).cpu().numpy()
+                preds.append(pred)
+                trues.append(y.numpy())
+        pred_norm = np.concatenate(preds, axis=0)
+        true_norm = np.concatenate(trues, axis=0)
+        pred = pred_norm * target_std + target_mean
+        true = true_norm * target_std + target_mean
+        mse = mean_squared_error(true.reshape(-1), pred.reshape(-1))
+        mae = mean_absolute_error(true.reshape(-1), pred.reshape(-1))
+        results.append(
+            {
+                **asdict(cfg),
+                "evaluation_protocol": protocol,
+                "test_mse": float(mse),
+                "test_mae": float(mae),
+                "best_epoch": int(best_epoch),
+                "best_validation_mse_norm": float(best_val_loss),
+                "final_train_mse_norm": float(final_train_loss),
+                "test_windows": int(len(test_ds)),
+                "validation_windows": int(len(validation_ds)),
+                "train_windows": int(len(train_ds)),
+                "checkpoint_path": str(checkpoint_path),
+            }
+        )
+        predictions[protocol] = (pred, true)
+    return results, predictions
 
 
 def plot_prediction(
@@ -751,7 +958,9 @@ def plot_summary_table(summary: pd.DataFrame, out_path: Path) -> None:
     display["MAE mean±std"] = display.apply(
         lambda r: f"{r['mae_mean']:.2f} ± {r['mae_std']:.2f}", axis=1
     )
-    display = display[["model", "horizon", "MSE mean±std", "MAE mean±std"]]
+    display = display[
+        ["model", "horizon", "evaluation_protocol", "MSE mean±std", "MAE mean±std"]
+    ]
     fig_height = max(2.2, 0.34 * (len(display) + 1))
     fig, ax = plt.subplots(figsize=(8.8, fig_height), dpi=180)
     ax.axis("off")
@@ -776,7 +985,7 @@ def plot_summary_table(summary: pd.DataFrame, out_path: Path) -> None:
 def summarize(rows: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     summary = (
-        df.groupby(["model_name", "horizon"], as_index=False)
+        df.groupby(["model_name", "horizon", "evaluation_protocol"], as_index=False)
         .agg(
             mse_mean=("test_mse", "mean"),
             mse_std=("test_mse", "std"),
@@ -789,9 +998,13 @@ def summarize(rows: list[dict]) -> pd.DataFrame:
         .rename(columns={"model_name": "model"})
     )
     model_order = {name: idx for idx, name in enumerate(ALL_MODELS)}
+    protocol_order = {"fixed_holdout": 0, "rolling_origin": 1}
     summary["_model_order"] = summary["model"].map(model_order).fillna(99)
-    summary = summary.sort_values(["horizon", "_model_order", "model"]).drop(
-        columns=["_model_order"]
+    summary["_protocol_order"] = summary["evaluation_protocol"].map(protocol_order).fillna(99)
+    summary = summary.sort_values(
+        ["horizon", "_protocol_order", "_model_order", "model"]
+    ).drop(
+        columns=["_model_order", "_protocol_order"]
     )
     return summary
 
@@ -800,8 +1013,11 @@ def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", type=Path, default=Path("/mnt/sdc/zoujunjie"))
     parser.add_argument("--work-dir", type=Path, default=Path("/mnt/sdc/zoujunjie/mlearn_power_coursework"))
+    parser.add_argument("--processed-dir", type=Path, default=None)
+    parser.add_argument("--run-dir", type=Path, default=None)
     parser.add_argument("--input-len", type=int, default=90)
     parser.add_argument("--split-ratio", type=float, default=0.65)
+    parser.add_argument("--validation-days", type=int, default=365)
     parser.add_argument("--epochs", type=int, default=30)
     parser.add_argument("--batch-size", type=int, default=32)
     parser.add_argument("--lr", type=float, default=1.0e-3)
@@ -809,32 +1025,63 @@ def main() -> None:
     parser.add_argument("--horizons", type=int, nargs="+", default=[90, 365])
     parser.add_argument("--models", nargs="+", default=DEFAULT_MODELS)
     parser.add_argument("--rebuild-data", action="store_true")
-    parser.add_argument("--append-results", action="store_true")
+    parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
     unknown_models = sorted(set(args.models) - set(ALL_MODELS))
     if unknown_models:
         raise ValueError(f"Unknown models: {unknown_models}")
 
     configure_environment(args.base)
-    for sub in ["data/raw", "data/weather", "data/processed", "results", "figures", "logs", "reports"]:
-        (args.work_dir / sub).mkdir(parents=True, exist_ok=True)
+    processed_dir = args.processed_dir or args.work_dir / "data" / "processed_causal"
+    run_dir = args.run_dir or args.work_dir / "runs" / "causal_tvt_v1"
+    for path in [
+        args.work_dir / "data" / "raw",
+        args.work_dir / "data" / "weather",
+        processed_dir,
+        run_dir / "results",
+        run_dir / "figures",
+        run_dir / "logs",
+        run_dir / "checkpoints",
+    ]:
+        path.mkdir(parents=True, exist_ok=True)
+
+    runs_path = run_dir / "results" / "metrics_runs.csv"
+    metadata_path = run_dir / "results" / "run_metadata.json"
+    if runs_path.exists() and not args.resume:
+        raise FileExistsError(
+            f"{runs_path} already exists. Choose a new --run-dir or pass --resume."
+        )
 
     raw_txt = download_uci(args.work_dir / "data" / "raw")
     weather_path = download_weather(args.work_dir / "data" / "weather")
     daily = build_daily_frame(
         raw_txt,
         weather_path,
-        args.work_dir / "data" / "processed",
+        processed_dir,
         args.split_ratio,
+        args.validation_days,
         rebuild=args.rebuild_data,
     )
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
 
-    rows: list[dict] = []
+    if runs_path.exists():
+        previous_results = pd.read_csv(runs_path)
+        rows: list[dict] = previous_results.to_dict("records")
+    else:
+        rows = []
+    required_protocols = {"fixed_holdout", "rolling_origin"}
+    completed: set[tuple[str, int, int]] = set()
+    if rows:
+        existing = pd.DataFrame(rows)
+        for key, group in existing.groupby(["model_name", "horizon", "seed"]):
+            if required_protocols.issubset(set(group["evaluation_protocol"])):
+                completed.add((str(key[0]), int(key[1]), int(key[2])))
+
     metadata: dict[str, dict] = {
         "data": {
             "raw_txt": str(raw_txt),
+            "processed_dir": str(processed_dir),
             "weather_url": WEATHER_URL,
             "weather_path": str(weather_path),
             "weather_department": "92 Hauts-de-Seine",
@@ -845,31 +1092,71 @@ def main() -> None:
             "weather_excluded_cols": {
                 "NBJBROU": "not used because the selected SURESNES station has 47 missing values out of 48 months"
             },
-            "weather_merge": "SURESNES station monthly precipitation background copied to each day in the same month",
+            "weather_merge": (
+                "Course-required SURESNES monthly precipitation values copied to each day "
+                "in the same month. These are retained as required and are not an as-of "
+                "weather forecast feed."
+            ),
             "missing_imputation": (
-                "minute-level same-month weekly-neighbor mean using t±7/±14/±21/±28 days, "
-                "then daily aggregation after dropping first and last incomplete days"
+                "Strictly causal minute-level mean from original same-month observations at "
+                "t-7/t-14/t-21/t-28 days; fallback uses the most recent earlier raw minute. "
+                "Filled values are never reused as donors."
             ),
             "daily_rows": int(len(daily)),
-            "split_ratio": args.split_ratio,
+            "split_strategy": "chronological self-split",
+            "train_plus_validation_ratio": args.split_ratio,
+            "validation_days": args.validation_days,
             "input_len": args.input_len,
             "models": args.models,
         },
-        "device": {"name": str(device), "torch": torch.__version__},
-        "runs": [],
+        "evaluation_protocols": {
+            "fixed_holdout": (
+                "One forecast at the fixed test boundary; no later test observations are "
+                "used as inputs."
+            ),
+            "rolling_origin": (
+                "The trained model is fixed, while each later origin may use observations "
+                "that became available earlier in the test period."
+            ),
+        },
+        "device": {
+            "type": str(device),
+            "name": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "CPU",
+            "torch": torch.__version__,
+        },
+        "run_dir": str(run_dir),
+        "arguments": {
+            "input_len": args.input_len,
+            "split_ratio": args.split_ratio,
+            "validation_days": args.validation_days,
+            "epochs": args.epochs,
+            "batch_size": args.batch_size,
+            "lr": args.lr,
+            "seeds": args.seeds,
+            "horizons": args.horizons,
+            "models": args.models,
+        },
+        "runs": rows,
     }
     for horizon in args.horizons:
-        train_ds, test_ds, meta = make_windows(
+        train_ds, validation_ds, test_sets, meta = make_windows(
             daily,
             input_len=args.input_len,
             output_len=horizon,
             split_ratio=args.split_ratio,
+            validation_days=args.validation_days,
         )
         metadata[f"horizon_{horizon}"] = meta
         input_dim = len(meta["feature_cols"])
-        sample_plotted: set[str] = set()
         for model_name in args.models:
             for seed in args.seeds:
+                run_key = (model_name, int(horizon), int(seed))
+                if run_key in completed:
+                    print(
+                        f"Skipping completed run model={model_name} "
+                        f"horizon={horizon} seed={seed}"
+                    )
+                    continue
                 cfg = TrainConfig(
                     model_name=model_name,
                     horizon=horizon,
@@ -879,47 +1166,73 @@ def main() -> None:
                     batch_size=args.batch_size,
                     lr=args.lr,
                 )
-                result, pred, true = train_one(
+                checkpoint_path = (
+                    run_dir
+                    / "checkpoints"
+                    / f"{model_name}_h{horizon}_seed{seed}_best_validation.pt"
+                )
+                run_results, predictions = train_one(
                     cfg,
                     train_ds,
-                    test_ds,
+                    validation_ds,
+                    test_sets,
                     input_dim=input_dim,
                     feature_cols=meta["feature_cols"],
                     target_mean=meta["target_mean"],
                     target_std=meta["target_std"],
                     device=device,
+                    checkpoint_path=checkpoint_path,
                 )
-                rows.append(result)
-                metadata["runs"].append(result)
-                if model_name not in sample_plotted:
-                    fig_name = f"{model_name}_h{horizon}_prediction.png"
-                    plot_prediction(
-                        pred,
-                        true,
-                        args.work_dir / "figures" / fig_name,
-                        title=f"{model_display_name(model_name)} {horizon}-day forecast",
-                    )
-                    np.savez(
-                        args.work_dir / "results" / f"{model_name}_h{horizon}_seed{seed}_predictions.npz",
-                        prediction=pred,
-                        ground_truth=true,
-                    )
-                    sample_plotted.add(model_name)
+                rows.extend(run_results)
+                metadata["runs"] = rows
+                pd.DataFrame(rows).to_csv(runs_path, index=False)
+                with metadata_path.open("w", encoding="utf-8") as f:
+                    json.dump(metadata, f, ensure_ascii=False, indent=2)
+
+                if seed == args.seeds[0]:
+                    for protocol, (pred, true) in predictions.items():
+                        fig_name = f"{model_name}_h{horizon}_{protocol}_prediction.png"
+                        protocol_title = protocol.replace("_", " ").title()
+                        plot_prediction(
+                            pred,
+                            true,
+                            run_dir / "figures" / fig_name,
+                            title=(
+                                f"{model_display_name(model_name)} {horizon}-day "
+                                f"forecast ({protocol_title})"
+                            ),
+                        )
+                        test_ds = test_sets[protocol]
+                        origin_indices = test_ds.starts + args.input_len
+                        origin_dates = (
+                            pd.to_datetime(daily["date"])
+                            .iloc[origin_indices]
+                            .dt.strftime("%Y-%m-%d")
+                            .to_numpy()
+                        )
+                        np.savez(
+                            run_dir
+                            / "results"
+                            / f"{model_name}_h{horizon}_seed{seed}_{protocol}_predictions.npz",
+                            prediction=pred,
+                            ground_truth=true,
+                            origin_date=origin_dates,
+                        )
 
     results_df = pd.DataFrame(rows)
-    runs_path = args.work_dir / "results" / "metrics_runs.csv"
-    if args.append_results and runs_path.exists():
-        previous = pd.read_csv(runs_path)
-        results_df = pd.concat([previous, results_df], ignore_index=True)
-        results_df = results_df.drop_duplicates(
-            subset=["model_name", "horizon", "seed"],
-            keep="last",
-        )
+    results_df = results_df.drop_duplicates(
+        subset=["model_name", "horizon", "seed", "evaluation_protocol"],
+        keep="last",
+    )
     summary_df = summarize(results_df.to_dict("records"))
     results_df.to_csv(runs_path, index=False)
-    summary_df.to_csv(args.work_dir / "results" / "metrics_summary.csv", index=False)
-    plot_summary_table(summary_df, args.work_dir / "figures" / "metrics_summary_table.png")
-    with (args.work_dir / "results" / "run_metadata.json").open("w", encoding="utf-8") as f:
+    summary_df.to_csv(run_dir / "results" / "metrics_summary.csv", index=False)
+    plot_summary_table(summary_df, run_dir / "figures" / "metrics_summary_table.png")
+    metadata["runs"] = results_df.to_dict("records")
+    metadata["completed_training_runs"] = int(
+        results_df[["model_name", "horizon", "seed"]].drop_duplicates().shape[0]
+    )
+    with metadata_path.open("w", encoding="utf-8") as f:
         json.dump(metadata, f, ensure_ascii=False, indent=2)
     print("\nSummary:")
     print(summary_df.to_string(index=False))

@@ -1,51 +1,88 @@
 # Machine Learning Course Project: Household Power Forecasting
 
-This repository contains the complete submission for the 2026 professional
-master machine learning course project.
+This repository implements the three forecasting models required by the 2026
+professional master machine-learning course assessment:
 
-The project implements and compares:
+1. LSTM
+2. Transformer
+3. PVG-iTransformer
 
-1. LSTM forecasting
-2. Transformer forecasting
-3. PVG-iTransformer forecasting
+The main experiment predicts 90-day and 365-day household electricity demand
+with five random seeds.
 
-It also includes PVG-iTransformer ablation runs that remove the Time Patch
-branch, the Variable branch, and the learnable Gate module.
+The corrected five-seed results and integrity checks are summarized in
+[`EXPERIMENT_RESULTS_CAUSAL_TVT.md`](EXPERIMENT_RESULTS_CAUSAL_TVT.md).
 
-## Data And Preprocessing
+## Data preprocessing
 
-The experiment uses the UCI household power data and merges monthly weather
-background variables from the Meteo-France data.gouv.fr resource for department
-92 Hauts-de-Seine.
+The electricity data comes from the UCI Individual Household Electric Power
+Consumption dataset. Minute-level gaps are repaired before daily aggregation.
 
-The final experiment uses the SURESNES station (`NUM_POSTE=92073001`) and four
-complete monthly precipitation variables: `RR`, `NBJRR1`, `NBJRR5`, and
-`NBJRR10`. `RR` is divided by 10 according to the course PDF before being
-merged. `NBJBROU` is not used because it is missing for 47 of the 48 months at
-the selected station.
+The previous implementation averaged both past and future weekly neighbours.
+The current implementation is strictly causal:
 
-Minute-level electricity gaps are filled before daily aggregation. For each
-missing minute, the script averages available same-month weekly-neighbor values
-at `t+/-7`, `t+/-14`, `t+/-21`, and `t+/-28` days with the same weekday and
-minute of day. The resulting daily dataset is evaluated with rolling-origin
-test windows.
+- primary donors: original observations at `t-7`, `t-14`, `t-21`, and `t-28`
+  days, at the same minute and within the same month;
+- fallback: the most recent earlier raw minute when no weekly donor exists;
+- filled values are never reused as donors;
+- every fill records its value time, latest donor time, method, and donor count;
+- the pipeline asserts `latest_donor_time < value_time`.
+
+Dropping every day containing a missing minute was evaluated and rejected. It
+would remove 82 days and split the series into 68 fragments; the longest
+continuous fragment would be only 54 days, so neither the 90-day nor 365-day
+task would retain a valid continuous window.
+
+Monthly Meteo-France weather variables from the SURESNES station
+(`NUM_POSTE=92073001`) are retained because weather features are required by
+the course. `RR`, `NBJRR1`, `NBJRR5`, and `NBJRR10` are copied to each day in
+their corresponding month. These variables are monthly background statistics,
+not an as-of daily weather forecast feed, and this limitation is recorded in
+the experiment metadata.
+
+## Chronological split and evaluation
+
+The 1,440 complete daily rows are divided chronologically:
+
+- training: 571 days, 2006-12-17 to 2008-07-09;
+- validation: 365 days, 2008-07-10 to 2009-07-09;
+- test: 504 days, 2009-07-10 to 2010-11-25.
+
+Feature and target scalers are fitted only on the training segment. A model
+checkpoint is selected using validation MSE after each epoch. The final test is
+never used for checkpoint selection.
+
+Each trained checkpoint is evaluated under two separately labelled protocols:
+
+- `fixed_holdout`: one forecast at the fixed test boundary, without using any
+  later test observation as input;
+- `rolling_origin`: the model parameters remain fixed, while later forecast
+  origins may use observations that have become available earlier in the test
+  period.
 
 ## Environment
 
-The experiments were run in the isolated conda environment on the course server:
+The server environment used for the experiment is:
 
 ```bash
 /mnt/sdc/zoujunjie/miniconda3/envs/mlearn/bin/python
 ```
 
-For a fresh environment, install the Python dependencies listed in
-`requirements.txt`.
+Deterministic PyTorch algorithms and deterministic CUDA attention kernels are
+enabled. The run metadata records the device, PyTorch version, split,
+preprocessing policy, model configuration, checkpoint epoch, and both
+evaluation protocols.
+
+`requirements.txt` records the tested Python package versions. The server run
+used Python 3.10.20, PyTorch 2.4.1 with CUDA 11.8, and cuDNN 9.1.
 
 ## Run
 
 ```bash
 BASE=/mnt/sdc/zoujunjie
 WORK=$BASE/mlearn_power_coursework
+RUN=$WORK/runs/causal_tvt_full_20260711
+
 export HOME=$BASE
 export TMPDIR=$BASE/tmp
 export CONDA_PKGS_DIRS=$BASE/conda_pkgs
@@ -57,42 +94,46 @@ cd "$WORK"
 "$BASE/miniconda3/envs/mlearn/bin/python" scripts/run_forecasting.py \
   --base "$BASE" \
   --work-dir "$WORK" \
+  --processed-dir "$WORK/data/processed_causal" \
+  --run-dir "$RUN" \
   --rebuild-data \
-  --models lstm transformer pvg_itransformer pvg_no_time pvg_no_variable pvg_no_gate \
+  --models lstm transformer pvg_itransformer \
   --epochs 30 \
   --batch-size 32 \
   --seeds 42 43 44 45 46 \
   --horizons 90 365
 ```
 
-Generate the report:
+An interrupted experiment can be continued with the same arguments plus
+`--resume`. Completed model/horizon/seed combinations are skipped.
 
-```bash
-"$BASE/miniconda3/envs/mlearn/bin/python" scripts/build_report_detailed.py
-```
+## Outputs
 
-## Repository Contents
+Processed data and audit files:
 
-- `scripts/run_forecasting.py`: data preparation, model definitions, training, evaluation, and plotting.
-- `scripts/build_report_detailed.py`: report generation script.
-- `data/processed/`: processed daily power data and selected weather station summaries.
-- `data/weather/`: Meteo-France monthly weather source file.
-- `results/`: run-level metrics, summary metrics, and metadata.
-- `figures/`: prediction curves and result table image.
-- `reports/`: final DOCX and PDF report.
-- `logs/`: latest full training and ablation logs.
+- `data/processed_causal/daily_power.csv`
+- `data/processed_causal/train.csv`
+- `data/processed_causal/validation.csv`
+- `data/processed_causal/test.csv`
+- `data/processed_causal/tes.csv`
+- `data/processed_causal/split_manifest.json`
+- `data/processed_causal/minute_imputation_summary.csv`
+- `data/processed_causal/minute_imputation_audit.csv.gz`
 
-## Main Deliverables
+Clean experiment outputs:
 
-- `reports/mlearn_power_detailed_report.pdf`
-- `reports/mlearn_power_detailed_report.docx`
-- `results/metrics_summary.csv`
-- `results/metrics_runs.csv`
+- `runs/causal_tvt_full_20260711/results/metrics_runs.csv`
+- `runs/causal_tvt_full_20260711/results/metrics_summary.csv`
+- `runs/causal_tvt_full_20260711/results/run_metadata.json`
+- `runs/causal_tvt_full_20260711/results/*_predictions.npz`
+- `runs/causal_tvt_full_20260711/figures/*_prediction.png`
+- `runs/causal_tvt_full_20260711/figures/metrics_summary_table.png`
+- `runs/causal_tvt_full_20260711/checkpoints/*_best_validation.pt`
 
-## GitHub Submission
+Prediction arrays and checkpoints are generated on the server but intentionally
+ignored by Git to keep the repository compact; metrics, metadata, processed
+data, audit records, and figures are versioned.
 
-Repository URL:
-
-```text
-https://github.com/nianaaa/Machine-Learning-Course-Project
-```
+Legacy files under the old top-level `results/` and `figures/` directories use
+the earlier preprocessing and evaluation protocol and must not be mixed with
+the clean run above.
