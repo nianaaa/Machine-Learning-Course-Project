@@ -6,7 +6,7 @@ This repository implements the three models required by the 2026 professional-ma
 2. Transformer
 3. PVG-iTransformer
 
-Each model is trained independently for direct 90-day and 365-day forecasting. The verified experiment uses five random seeds and a single fixed test origin. It does not use rolling-origin evaluation.
+Each model is trained independently for direct 90-day and 365-day forecasting. The verified experiment uses five random seeds and a single fixed test origin. The current codebase contains only these three required models; obsolete PVG ablation variants and rolling-origin evaluation are not implemented.
 
 The complete verified results and their limitations are reported in [`EXPERIMENT_RESULTS_ASOF_FIXED.md`](EXPERIMENT_RESULTS_ASOF_FIXED.md). The matching revised course report is available as [`reports/mlearn_power_report_polished_updated.docx`](reports/mlearn_power_report_polished_updated.docx).
 
@@ -94,7 +94,7 @@ export XDG_CACHE_HOME=$BASE/.cache
 export PYTHONNOUSERSITE=1
 
 cd "$WORK"
-"$PYTHON" scripts/run_forecasting.py \
+"$PYTHON" -s scripts/run_forecasting.py \
   --base "$BASE" \
   --work-dir "$WORK" \
   --processed-dir "$PROCESSED" \
@@ -113,6 +113,17 @@ cd "$WORK"
 ```
 
 Use `--resume` only to continue an interrupted run with the same experiment signature. Completed model/horizon/seed combinations are skipped.
+
+After the run, verify the complete report-matching artifact set with:
+
+```bash
+"$PYTHON" -s scripts/verify_run.py \
+  --work-dir "$WORK" \
+  --processed-dir "$PROCESSED" \
+  --run-dir "$RUN"
+```
+
+The verifier checks the exact three-model run, checkpoint, prediction, and figure sets; recomputes the trained-model summary and train-only baseline; re-hashes the experiment signature and all bound data; verifies strict lag-1 weather mapping and causal minute donors; and rejects ablation or legacy outputs.
 
 ## Outputs
 
@@ -134,24 +145,21 @@ The repository's top-level formal-run artifacts are:
 - `results/run_metadata.json`
 - `results/baseline_metrics.csv`
 - `results/integrity_report.json`
-- `results/split_manifest.json`
-- `results/weather_monthly_source_mapping.csv`
 - `figures/*_fixed_holdout_prediction.png`
-- `figures/metrics_summary_table.png`
-- `logs/full_run.log`
 
-The full server run path shown above additionally retains checkpoints and representative prediction arrays used for integrity verification.
+The full server run path shown above additionally retains the 30 validation-selected checkpoints and six representative prediction arrays used for integrity verification. GitHub omits those regenerable binary files.
 
 ## Provenance
 
-- forecasting script SHA-256: `262f0405845635d3468e66c279066944019588900e257acdc356d6c7680c4fd1`
-- experiment signature: `8e78be2f38d9acfe19d9b02677fb4fe355bb1f6bc1175c82a10ec379655e7971`
+- forecasting script SHA-256: `7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8`
+- experiment signature: `ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6`
+- processed split manifest SHA-256: `60b0ed1b283b8f9582bcff1331eb4eee7adec0d6a2eb7182cc39df41e416765d`
 - preprocessing version: `causal_minute_asof_weather_lag1_v2`
 
-The signature binds the script, source and processed data hashes, environment, model configuration, weather lag, and evaluation protocol. Full artifact hashes are recorded in `split_manifest.json` and `run_metadata.json`.
+The signature binds the script, source and processed data hashes, environment, model configuration, weather lag, and evaluation protocol. Full artifact hashes are recorded in `data/processed_causal_asof_lag1_v2/split_manifest.json` and `results/run_metadata.json`.
 
 ## Current artifact scope and history
 
-The current top-level `results/`, `figures/`, and `logs/` directories are the formal `fixed_holdout_asof_lag1_v2` artifacts described here. The current processed data are in `data/processed_causal_asof_lag1_v2/`.
+The current top-level `results/` and `figures/` directories are the compact GitHub snapshot of the formal `fixed_holdout_asof_lag1_v2` run. The current processed data and leakage-audit evidence are in `data/processed_causal_asof_lag1_v2/`. The server keeps one full run under `runs/fixed_holdout_asof_lag1_v2/`; superseded smoke, rolling-origin, same-month-weather, and ablation runs have been removed.
 
 Earlier repository commits contain artifacts produced with same-month weather, non-causal preprocessing, or rolling-origin evaluation. Those historical artifacts must not be combined with the files in the current checkout.

@@ -43,15 +43,10 @@ PREPROCESSING_VERSION = "causal_minute_asof_weather_lag1_v2"
 WEATHER_LAG_MONTHS = 1
 EVALUATION_PROTOCOL = "fixed_holdout"
 DEFAULT_MODELS = ["lstm", "transformer", "pvg_itransformer"]
-ABLATION_MODELS = ["pvg_no_time", "pvg_no_variable", "pvg_no_gate"]
-ALL_MODELS = DEFAULT_MODELS + ABLATION_MODELS
 MODEL_DISPLAY_NAMES = {
     "lstm": "LSTM",
     "transformer": "Transformer",
     "pvg_itransformer": "PVG-iTransformer",
-    "pvg_no_time": "PVG w/o Time Patch",
-    "pvg_no_variable": "PVG w/o Variable",
-    "pvg_no_gate": "PVG w/o Gate",
 }
 
 
@@ -483,7 +478,6 @@ def build_daily_frame(
     train_path = out_dir / "train.csv"
     validation_path = out_dir / "validation.csv"
     test_path = out_dir / "test.csv"
-    tes_path = out_dir / "tes.csv"
     audit_path = out_dir / "minute_imputation_audit.csv.gz"
     split_manifest_path = out_dir / "split_manifest.json"
     required_cache_paths = {
@@ -491,7 +485,6 @@ def build_daily_frame(
         "train.csv": train_path,
         "validation.csv": validation_path,
         "test.csv": test_path,
-        "tes.csv": tes_path,
         "minute_imputation_audit.csv.gz": audit_path,
         "minute_imputation_summary.csv": out_dir / "minute_imputation_summary.csv",
         "weather_monthly_source_mapping.csv": out_dir / "weather_monthly_source_mapping.csv",
@@ -629,7 +622,11 @@ def build_daily_frame(
     imputation_df = pd.DataFrame.from_dict(imputation_summary, orient="index")
     imputation_df.index.name = "variable"
     imputation_df.reset_index().to_csv(out_dir / "minute_imputation_summary.csv", index=False)
-    imputation_audit.to_csv(audit_path, index=False, compression="gzip")
+    imputation_audit.to_csv(
+        audit_path,
+        index=False,
+        compression={"method": "gzip", "mtime": 0},
+    )
 
     df["Sub_metering_remainder"] = (
         df["Global_active_power"] * 1000.0 / 60.0
@@ -681,7 +678,6 @@ def build_daily_frame(
     daily.iloc[:train_end_idx].to_csv(train_path, index=False)
     daily.iloc[train_end_idx:test_start_idx].to_csv(validation_path, index=False)
     daily.iloc[test_start_idx:].to_csv(test_path, index=False)
-    daily.iloc[test_start_idx:].to_csv(tes_path, index=False)
     split_manifest = {
         "preprocessing_version": PREPROCESSING_VERSION,
         "strategy": "chronological_self_split",
@@ -969,13 +965,8 @@ class PVGiTransformerForecaster(nn.Module):
         var_layers: int = 2,
         dropout: float = 0.1,
         time_pooling: str = "last",
-        use_time_branch: bool = True,
-        use_variable_branch: bool = True,
-        use_gate: bool = True,
     ) -> None:
         super().__init__()
-        if not use_time_branch and not use_variable_branch:
-            raise ValueError("At least one PVG branch must be enabled")
         if time_pooling not in {"mean", "last"}:
             raise ValueError(f"Unknown time_pooling={time_pooling}")
         patch_starts = make_patch_starts(input_len, patch_len, stride)
@@ -983,9 +974,6 @@ class PVGiTransformerForecaster(nn.Module):
         self.input_len = input_len
         self.patch_len = patch_len
         self.time_pooling = time_pooling
-        self.use_time_branch = use_time_branch
-        self.use_variable_branch = use_variable_branch
-        self.use_gate = use_gate and use_time_branch and use_variable_branch
         self.register_buffer(
             "patch_starts",
             torch.tensor(patch_starts, dtype=torch.long),
@@ -1039,39 +1027,28 @@ class PVGiTransformerForecaster(nn.Module):
         nn.init.normal_(self.patch_pos, mean=0.0, std=0.02)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        f_time = None
-        if self.use_time_branch:
-            patch_starts = self.patch_starts.detach().cpu().tolist()
-            patches = [
-                x[:, start : start + self.patch_len, :].reshape(x.size(0), -1)
-                for start in patch_starts
-            ]
-            patch_tokens = self.patch_embed(torch.stack(patches, dim=1)) + self.patch_pos
-            patch_states = self.patch_encoder(patch_tokens)
-            if self.time_pooling == "last":
-                f_time = patch_states[:, -1]
-            else:
-                f_time = patch_states.mean(dim=1)
-
-        f_var = None
-        if self.use_variable_branch:
-            var_tokens = self.var_embed(x.transpose(1, 2))
-            var_tokens = (
-                var_tokens
-                + self.var_type_embed(self.var_ids).unsqueeze(0)
-                + self.var_group_embed(self.var_group_ids).unsqueeze(0)
-            )
-            f_var = self.var_encoder(var_tokens)[:, 0]
-
-        if f_time is None:
-            fused = f_var
-        elif f_var is None:
-            fused = f_time
-        elif self.use_gate:
-            gate = self.gate(torch.cat([f_time, f_var], dim=-1))
-            fused = gate * f_time + (1.0 - gate) * f_var
+        patch_starts = self.patch_starts.detach().cpu().tolist()
+        patches = [
+            x[:, start : start + self.patch_len, :].reshape(x.size(0), -1)
+            for start in patch_starts
+        ]
+        patch_tokens = self.patch_embed(torch.stack(patches, dim=1)) + self.patch_pos
+        patch_states = self.patch_encoder(patch_tokens)
+        if self.time_pooling == "last":
+            f_time = patch_states[:, -1]
         else:
-            fused = 0.5 * (f_time + f_var)
+            f_time = patch_states.mean(dim=1)
+
+        var_tokens = self.var_embed(x.transpose(1, 2))
+        var_tokens = (
+            var_tokens
+            + self.var_type_embed(self.var_ids).unsqueeze(0)
+            + self.var_group_embed(self.var_group_ids).unsqueeze(0)
+        )
+        f_var = self.var_encoder(var_tokens)[:, 0]
+
+        gate = self.gate(torch.cat([f_time, f_var], dim=-1))
+        fused = gate * f_time + (1.0 - gate) * f_var
         return self.head(fused)
 
 
@@ -1100,16 +1077,13 @@ def build_model(
         return LSTMForecaster(input_dim=input_dim, output_len=output_len)
     if name == "transformer":
         return TransformerForecaster(input_dim=input_dim, output_len=output_len)
-    if name in {"pvg_itransformer", "pvg_no_time", "pvg_no_variable", "pvg_no_gate"}:
+    if name == "pvg_itransformer":
         return PVGiTransformerForecaster(
             input_dim=input_dim,
             output_len=output_len,
             input_len=input_len,
             feature_cols=feature_cols,
             time_pooling=pvg_time_pooling,
-            use_time_branch=name != "pvg_no_time",
-            use_variable_branch=name != "pvg_no_variable",
-            use_gate=name == "pvg_itransformer",
         )
     raise ValueError(name)
 
@@ -1278,40 +1252,6 @@ def plot_prediction(
     plt.close()
 
 
-def plot_summary_table(summary: pd.DataFrame, out_path: Path) -> None:
-    out_path.parent.mkdir(parents=True, exist_ok=True)
-    display = summary.copy()
-    display["model"] = display["model"].map(model_display_name)
-    display["MSE mean±std"] = display.apply(
-        lambda r: f"{r['mse_mean']:.2f} ± {r['mse_std']:.2f}", axis=1
-    )
-    display["MAE mean±std"] = display.apply(
-        lambda r: f"{r['mae_mean']:.2f} ± {r['mae_std']:.2f}", axis=1
-    )
-    display = display[
-        ["model", "horizon", "evaluation_protocol", "MSE mean±std", "MAE mean±std"]
-    ]
-    fig_height = max(2.2, 0.34 * (len(display) + 1))
-    fig, ax = plt.subplots(figsize=(8.8, fig_height), dpi=180)
-    ax.axis("off")
-    table = ax.table(
-        cellText=display.values,
-        colLabels=display.columns,
-        loc="center",
-        cellLoc="center",
-    )
-    table.auto_set_font_size(False)
-    table.set_fontsize(8 if len(display) > 8 else 9)
-    table.scale(1, 1.22 if len(display) > 8 else 1.35)
-    for (row, _col), cell in table.get_celld().items():
-        if row == 0:
-            cell.set_facecolor("#dbeaf7")
-            cell.set_text_props(weight="bold")
-    fig.tight_layout()
-    fig.savefig(out_path)
-    plt.close(fig)
-
-
 def summarize(rows: list[dict]) -> pd.DataFrame:
     df = pd.DataFrame(rows)
     summary = (
@@ -1327,7 +1267,7 @@ def summarize(rows: list[dict]) -> pd.DataFrame:
         )
         .rename(columns={"model_name": "model"})
     )
-    model_order = {name: idx for idx, name in enumerate(ALL_MODELS)}
+    model_order = {name: idx for idx, name in enumerate(DEFAULT_MODELS)}
     summary["_model_order"] = summary["model"].map(model_order).fillna(99)
     summary = summary.sort_values(
         ["horizon", "_model_order", "model"]
@@ -1335,6 +1275,50 @@ def summarize(rows: list[dict]) -> pd.DataFrame:
         columns=["_model_order"]
     )
     return summary
+
+
+def train_only_month_climatology(
+    daily: pd.DataFrame,
+    split_ratio: float,
+    validation_days: int,
+    horizons: list[int],
+) -> pd.DataFrame:
+    test_start_idx = int(len(daily) * split_ratio)
+    train_end_idx = test_start_idx - validation_days
+    dates = pd.to_datetime(daily["date"])
+    target = daily["Global_active_power"].to_numpy(dtype=float)
+    train_months = dates.iloc[:train_end_idx].dt.month
+    monthly_means = (
+        pd.DataFrame({"month": train_months, "target": target[:train_end_idx]})
+        .groupby("month")["target"]
+        .mean()
+    )
+    rows = []
+    for horizon in horizons:
+        end_idx = test_start_idx + int(horizon)
+        if end_idx > len(daily):
+            raise ValueError(
+                f"horizon={horizon} exceeds the fixed test segment of "
+                f"{len(daily) - test_start_idx} days"
+            )
+        scored_dates = dates.iloc[test_start_idx:end_idx]
+        truth = target[test_start_idx:end_idx]
+        prediction = scored_dates.dt.month.map(monthly_means).to_numpy(dtype=float)
+        if np.isnan(prediction).any():
+            raise RuntimeError("Train-only month climatology has an unseen test month")
+        rows.append(
+            {
+                "method": "train_month_climatology",
+                "horizon": int(horizon),
+                "evaluation_protocol": EVALUATION_PROTOCOL,
+                "mse": float(mean_squared_error(truth, prediction)),
+                "mae": float(mean_absolute_error(truth, prediction)),
+                "fit_scope": f"train_only_{train_end_idx}_days",
+                "test_start": scored_dates.iloc[0].strftime("%Y-%m-%d"),
+                "test_end": scored_dates.iloc[-1].strftime("%Y-%m-%d"),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def main() -> None:
@@ -1360,7 +1344,7 @@ def main() -> None:
     parser.add_argument("--rebuild-data", action="store_true")
     parser.add_argument("--resume", action="store_true")
     args = parser.parse_args()
-    unknown_models = sorted(set(args.models) - set(ALL_MODELS))
+    unknown_models = sorted(set(args.models) - set(DEFAULT_MODELS))
     if unknown_models:
         raise ValueError(f"Unknown models: {unknown_models}")
 
@@ -1619,7 +1603,13 @@ def main() -> None:
     summary_df = summarize(results_df.to_dict("records"))
     results_df.to_csv(runs_path, index=False)
     summary_df.to_csv(run_dir / "results" / "metrics_summary.csv", index=False)
-    plot_summary_table(summary_df, run_dir / "figures" / "metrics_summary_table.png")
+    baseline_df = train_only_month_climatology(
+        daily,
+        split_ratio=args.split_ratio,
+        validation_days=args.validation_days,
+        horizons=list(args.horizons),
+    )
+    baseline_df.to_csv(run_dir / "results" / "baseline_metrics.csv", index=False)
     metadata["runs"] = results_df.to_dict("records")
     metadata["completed_training_runs"] = int(
         results_df[["model_name", "horizon", "seed"]].drop_duplicates().shape[0]

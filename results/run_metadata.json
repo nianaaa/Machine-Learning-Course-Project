@@ -1,13 +1,13 @@
 {
   "script": {
     "path": "/mnt/sdc/zoujunjie/mlearn_power_coursework/scripts/run_forecasting.py",
-    "sha256": "262f0405845635d3468e66c279066944019588900e257acdc356d6c7680c4fd1"
+    "sha256": "7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8"
   },
   "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
   "experiment_signature": {
-    "sha256": "8e78be2f38d9acfe19d9b02677fb4fe355bb1f6bc1175c82a10ec379655e7971",
+    "sha256": "ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6",
     "payload": {
-      "script_sha256": "262f0405845635d3468e66c279066944019588900e257acdc356d6c7680c4fd1",
+      "script_sha256": "7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8",
       "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
       "weather_lag_months": 1,
       "evaluation_protocol": "fixed_holdout",
@@ -16,7 +16,7 @@
         "weather": "bbd02a677c6237e03ca89b5fb364d7b2e55c8e980a80b746f98161992a8bafe8",
         "daily_power": "d7618141ee0b7f7413026ec62da918b546f8cd3c3793d59afe7377a53fa8edb9",
         "test_split": "639c92aac8743dd72d1ab249034509dac9680cb944b5a9519c10f9db0e728a5e",
-        "split_manifest": "4ac1216e646e064d0c44c16810bb0616149c4b48208fcd8368cf14a33ebcd188",
+        "split_manifest": "60b0ed1b283b8f9582bcff1331eb4eee7adec0d6a2eb7182cc39df41e416765d",
         "weather_source_mapping": "d5613ec5192960545199ff73f17b05da40bfc6e5c0384168f72285b5892da389"
       },
       "environment": {
@@ -137,7 +137,7 @@
       "weather": "bbd02a677c6237e03ca89b5fb364d7b2e55c8e980a80b746f98161992a8bafe8",
       "daily_power": "d7618141ee0b7f7413026ec62da918b546f8cd3c3793d59afe7377a53fa8edb9",
       "test_split": "639c92aac8743dd72d1ab249034509dac9680cb944b5a9519c10f9db0e728a5e",
-      "split_manifest": "4ac1216e646e064d0c44c16810bb0616149c4b48208fcd8368cf14a33ebcd188",
+      "split_manifest": "60b0ed1b283b8f9582bcff1331eb4eee7adec0d6a2eb7182cc39df41e416765d",
       "weather_source_mapping": "d5613ec5192960545199ff73f17b05da40bfc6e5c0384168f72285b5892da389"
     },
     "weather_url": "https://object.files.data.gouv.fr/meteofrance/data/synchro_ftp/BASE/MENS/MENSQ_92_previous-1950-2024.csv.gz",

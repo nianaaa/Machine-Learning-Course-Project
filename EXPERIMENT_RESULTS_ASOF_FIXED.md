@@ -81,7 +81,7 @@ The defensible conclusion is therefore narrower than â€œPVG is always superiorâ€
 - There is only one test origin per horizon. Five seeds do not provide evidence of performance across seasons or forecast origins.
 - The lag-1 weather merge removes same-month future information but remains a monthly proxy. It assumes the previous month's aggregate is available at the next month's start and contains no daily weather forecast.
 - The seasonal baseline is a diagnostic computed under the same fixed test dates, not one of the three course-required trained models. It is kept separate from `metrics_runs.csv` and `metrics_summary.csv`.
-- No ablation result from an earlier preprocessing or rolling-origin run is used here.
+- The published pipeline accepts only the three course-required models; obsolete PVG ablation variants and their artifacts have been removed.
 
 ## Integrity checks and provenance
 
@@ -89,20 +89,21 @@ The defensible conclusion is therefore narrower than â€œPVG is always superiorâ€
 - 30 metric rows and 6 summary groups; all use `evaluation_protocol=fixed_holdout`.
 - Every metric row has one validation window and one test window.
 - Thirty validation-selected checkpoints; selected epochs range from 4 through 30.
-- Representative seed-42 prediction arrays have shapes `(1, 90)` and `(1, 365)` and begin at 2009-07-10.
+- Six representative seed-42 prediction arrays have shapes `(1, 90)` or `(1, 365)` and begin at 2009-07-10.
+- The saved model summary and train-only seasonal baseline both recompute from their underlying data; the experiment-signature digest and its six bound data hashes also verify.
 - Weather source mapping covers every target month from 2006-12 through 2010-11 with the immediately preceding source month.
 - Minute-imputation audit rows with a non-causal donor: 0.
 
 Hashes:
 
-- forecasting script SHA-256: `262f0405845635d3468e66c279066944019588900e257acdc356d6c7680c4fd1`
-- experiment signature: `8e78be2f38d9acfe19d9b02677fb4fe355bb1f6bc1175c82a10ec379655e7971`
-- split manifest SHA-256: `4ac1216e646e064d0c44c16810bb0616149c4b48208fcd8368cf14a33ebcd188`
+- forecasting script SHA-256: `7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8`
+- experiment signature: `ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6`
+- split manifest SHA-256: `60b0ed1b283b8f9582bcff1331eb4eee7adec0d6a2eb7182cc39df41e416765d`
 - `metrics_runs.csv` SHA-256: `1be956d97f7ef7ad78e18eea69b9147aa0ed80642ccf2998451fe4133e374a3c`
 - `metrics_summary.csv` SHA-256: `f08e959b72d867ddaf42a9ba1491bb265ecfd3ebddfb257ed44485db6dcb8fd3`
 
-The experiment signature binds the forecasting script, preprocessing version, weather lag, evaluation protocol, source and processed data hashes, dependency environment, device, and model arguments. Detailed hashes and paths are stored in `split_manifest.json` and `run_metadata.json`.
+The experiment signature binds the forecasting script, preprocessing version, weather lag, evaluation protocol, source and processed data hashes, dependency environment, device, and model arguments. Detailed hashes and paths are stored in `data/processed_causal_asof_lag1_v2/split_manifest.json` and `results/run_metadata.json`.
 
 ## Current artifact scope and history
 
-In the current repository checkout, the top-level `results/` and `figures/` directories contain this formal `fixed_holdout_asof_lag1_v2` run. Older same-month-weather, non-causal, or rolling-origin artifacts occur only in earlier repository commits and must not be mixed with the current artifacts.
+In the current repository checkout, the top-level `results/` and `figures/` directories contain the compact snapshot of this formal `fixed_holdout_asof_lag1_v2` run. The server retains only the matching full run; obsolete same-month-weather, non-causal, rolling-origin, smoke, and ablation working directories were removed.
