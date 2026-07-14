@@ -23,8 +23,5 @@
     "RR_mm": 65.1
   },
   "minute_imputation_audit_rows": 181853,
-  "noncausal_imputation_donors": 0,
-  "ablation_models_present": false,
-  "baseline_metrics_present": false,
-  "legacy_tes_csv_present": false
+  "noncausal_imputation_donors": 0
 }

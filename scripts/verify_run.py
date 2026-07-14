@@ -27,7 +27,7 @@ def require(condition: bool, message: str) -> None:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Verify the report-matching formal run")
+    parser = argparse.ArgumentParser(description="Verify the course experiment artifacts")
     parser.add_argument(
         "--work-dir",
         type=Path,
@@ -54,12 +54,6 @@ def main() -> None:
     metadata = json.loads((results_dir / "run_metadata.json").read_text("utf-8"))
     script_hash = sha256_file(script_path)
     require(metadata["script"]["sha256"] == script_hash, "forecasting script hash mismatch")
-    require(not (processed_dir / "tes.csv").exists(), "legacy tes.csv still exists")
-    require(
-        not (results_dir / "baseline_metrics.csv").exists(),
-        "obsolete baseline_metrics.csv still exists",
-    )
-
     signature = metadata["experiment_signature"]
     signature_payload = signature["payload"]
     signature_digest = hashlib.sha256(
@@ -267,9 +261,6 @@ def main() -> None:
         },
         "minute_imputation_audit_rows": int(len(audit)),
         "noncausal_imputation_donors": noncausal,
-        "ablation_models_present": False,
-        "baseline_metrics_present": False,
-        "legacy_tes_csv_present": False,
     }
     output = args.output or results_dir / "integrity_report.json"
     output.parent.mkdir(parents=True, exist_ok=True)

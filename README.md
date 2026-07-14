@@ -6,9 +6,9 @@ This repository implements the three models required by the 2026 professional-ma
 2. Transformer
 3. PVG-iTransformer
 
-Each model is trained independently for direct 90-day and 365-day forecasting. The verified experiment uses five random seeds and a single fixed test origin. The current codebase contains only these three required models; obsolete PVG ablation variants and rolling-origin evaluation are not implemented.
+Each model is trained independently for direct 90-day and 365-day forecasting. The experiment uses five random seeds and a single fixed test origin.
 
-The complete verified three-model results and their limitations are reported in [`EXPERIMENT_RESULTS_ASOF_FIXED.md`](EXPERIMENT_RESULTS_ASOF_FIXED.md). A previously generated course report is retained as [`reports/mlearn_power_report_polished_updated.docx`](reports/mlearn_power_report_polished_updated.docx); this code-only cleanup does not edit that document.
+The complete three-model results and their limitations are reported in [`EXPERIMENT_RESULTS.md`](EXPERIMENT_RESULTS.md).
 
 ## Leakage-controlled preprocessing
 
@@ -73,11 +73,11 @@ Processed data are stored in:
 /mnt/sdc/zoujunjie/mlearn_power_coursework/data/processed_causal_asof_lag1_v2
 ```
 
-The verified result set contains only the three course-required models: LSTM, Transformer, and PVG-iTransformer. No auxiliary baseline or ablation model is implemented or published as a formal result.
+The result set contains the three course-required models: LSTM, Transformer, and PVG-iTransformer.
 
 ## Reproduce
 
-The verified configuration used Python 3.10.20, PyTorch 2.4.1+cu118, and an NVIDIA GeForce RTX 3080. Run the following with an empty run directory; change `RUN` when retaining the verified artifacts above.
+The experiment used Python 3.10.20, PyTorch 2.4.1+cu118, and an NVIDIA GeForce RTX 3080. Run the following with an empty run directory.
 
 ```bash
 BASE=/mnt/sdc/zoujunjie
@@ -114,7 +114,7 @@ cd "$WORK"
 
 Use `--resume` only to continue an interrupted run with the same experiment signature. Completed model/horizon/seed combinations are skipped.
 
-After the run, verify the complete report-matching artifact set with:
+After the run, verify the complete experiment artifact set with:
 
 ```bash
 "$PYTHON" -s scripts/verify_run.py \
@@ -123,7 +123,7 @@ After the run, verify the complete report-matching artifact set with:
   --run-dir "$RUN"
 ```
 
-The verifier checks the exact three-model run, checkpoint, prediction, and figure sets; recomputes the trained-model summary; re-hashes the experiment signature and all bound data; verifies strict lag-1 weather mapping and causal minute donors; and rejects auxiliary baseline, ablation, or legacy outputs.
+The verifier checks the exact three-model run, checkpoint, prediction, and figure sets; recomputes the trained-model summary; re-hashes the experiment signature and all bound data; and verifies strict lag-1 weather mapping and causal minute donors.
 
 ## Outputs
 
@@ -156,9 +156,3 @@ The full server run path shown above additionally retains the 30 validation-sele
 - preprocessing version: `causal_minute_asof_weather_lag1_v2`
 
 The signature binds the script, source and processed data hashes, environment, model configuration, weather lag, and evaluation protocol. Full artifact hashes are recorded in `data/processed_causal_asof_lag1_v2/split_manifest.json` and `results/run_metadata.json`.
-
-## Current artifact scope and history
-
-The current top-level `results/` and `figures/` directories are the compact GitHub snapshot of the formal `fixed_holdout_asof_lag1_v2` run. The current processed data and leakage-audit evidence are in `data/processed_causal_asof_lag1_v2/`. The server keeps one full run under `runs/fixed_holdout_asof_lag1_v2/`; superseded smoke, rolling-origin, same-month-weather, and ablation runs have been removed.
-
-Earlier repository commits contain artifacts produced with same-month weather, non-causal preprocessing, or rolling-origin evaluation. Those historical artifacts must not be combined with the files in the current checkout.

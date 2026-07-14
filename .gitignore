@@ -8,5 +8,4 @@ __pycache__/
 Thumbs.db
 data/raw/
 logs/
-reports/render*/
 runs/

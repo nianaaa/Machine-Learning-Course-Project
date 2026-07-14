@@ -12,9 +12,7 @@ Processed data:
 /mnt/sdc/zoujunjie/mlearn_power_coursework/data/processed_causal_asof_lag1_v2
 ```
 
-This run evaluates LSTM, Transformer, and PVG-iTransformer under one leakage-controlled protocol: causal minute imputation, lag-1 as-of monthly weather, chronological train/validation/test splitting, validation-selected checkpoints, and one direct forecast at a fixed test boundary. No rolling-origin result is included.
-
-A previously generated course report is retained at [`reports/mlearn_power_report_polished_updated.docx`](reports/mlearn_power_report_polished_updated.docx). This code-only cleanup does not edit that document.
+This run evaluates LSTM, Transformer, and PVG-iTransformer under one leakage-controlled protocol: causal minute imputation, lag-1 as-of monthly weather, chronological train/validation/test splitting, validation-selected checkpoints, and one direct forecast at a fixed test boundary.
 
 ## Data and leakage controls
 
@@ -65,7 +63,7 @@ PVG-iTransformer has the lowest mean MSE and MAE among the three required neural
 - There is only one validation origin per horizon. Selecting among 30 epochs on one validation trajectory can make checkpoint choice sensitive to that episode.
 - There is only one test origin per horizon. Five seeds do not provide evidence of performance across seasons or forecast origins.
 - The lag-1 weather merge removes same-month future information but remains a monthly proxy. It assumes the previous month's aggregate is available at the next month's start and contains no daily weather forecast.
-- The published pipeline accepts only the three course-required models; auxiliary baselines, obsolete PVG ablation variants, and their artifacts have been removed.
+- The experiment compares the three course-required neural models under the same data split, training configuration, and evaluation protocol.
 
 ## Integrity checks and provenance
 
@@ -87,7 +85,3 @@ Hashes:
 - `metrics_summary.csv` SHA-256: `f08e959b72d867ddaf42a9ba1491bb265ecfd3ebddfb257ed44485db6dcb8fd3`
 
 The experiment signature binds the forecasting script, preprocessing version, weather lag, evaluation protocol, source and processed data hashes, dependency environment, device, and model arguments. Detailed hashes and paths are stored in `data/processed_causal_asof_lag1_v2/split_manifest.json` and `results/run_metadata.json`.
-
-## Current artifact scope and history
-
-In the current repository checkout, the top-level `results/` and `figures/` directories contain the compact snapshot of this formal `fixed_holdout_asof_lag1_v2` run. The server retains only the matching full run; obsolete same-month-weather, non-causal, rolling-origin, smoke, and ablation working directories were removed.
