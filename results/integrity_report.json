@@ -1,0 +1,30 @@
+{
+  "status": "pass",
+  "script_sha256": "7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8",
+  "experiment_signature_sha256": "ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6",
+  "signature_bound_data_files": 6,
+  "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
+  "device": "NVIDIA GeForce RTX 3080",
+  "metric_rows": 30,
+  "unique_metric_keys": 30,
+  "duplicate_metric_keys": 0,
+  "completed_training_runs": 30,
+  "summary_max_abs_recompute_difference": 3.552713678800501e-15,
+  "baseline_max_abs_recompute_difference": 0.0,
+  "prediction_archives": 6,
+  "checkpoints": 30,
+  "figures": 6,
+  "test_windows_per_run": 1,
+  "validation_windows_per_run": 1,
+  "test_origin": "2009-07-10",
+  "weather_lag_months": 1,
+  "weather_mapping_example": {
+    "target_month": 200907,
+    "source_month": 200906,
+    "RR_mm": 65.1
+  },
+  "minute_imputation_audit_rows": 181853,
+  "noncausal_imputation_donors": 0,
+  "ablation_models_present": false,
+  "legacy_tes_csv_present": false
+}

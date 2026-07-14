@@ -2,8 +2,11 @@ __pycache__/
 *.py[cod]
 *.npz
 *.pth
+*.pt
 .ipynb_checkpoints/
 .DS_Store
 Thumbs.db
 data/raw/
+logs/
 reports/render*/
+runs/

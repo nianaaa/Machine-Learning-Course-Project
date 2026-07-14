@@ -1,0 +1,8 @@
+variable,missing_minutes,weekly_mean_minutes,forward_fill_minutes,min_candidates,max_candidates,mean_candidates,max_donor_lag_minutes
+Global_active_power,25979,25912,67,0,4,2.2108626198083066,20160.0
+Global_reactive_power,25979,25912,67,0,4,2.2108626198083066,20160.0
+Voltage,25979,25912,67,0,4,2.2108626198083066,20160.0
+Global_intensity,25979,25912,67,0,4,2.2108626198083066,20160.0
+Sub_metering_1,25979,25912,67,0,4,2.2108626198083066,20160.0
+Sub_metering_2,25979,25912,67,0,4,2.2108626198083066,20160.0
+Sub_metering_3,25979,25912,67,0,4,2.2108626198083066,20160.0
