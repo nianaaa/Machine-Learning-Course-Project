@@ -1,16 +1,5 @@
 # As-of Fixed-Holdout Forecasting Results
 
-Verified run:
-
-```text
-/mnt/sdc/zoujunjie/mlearn_power_coursework/runs/fixed_holdout_asof_lag1_v2
-```
-
-Processed data:
-
-```text
-/mnt/sdc/zoujunjie/mlearn_power_coursework/data/processed_causal_asof_lag1_v2
-```
 
 This run evaluates LSTM, Transformer, and PVG-iTransformer under one leakage-controlled protocol: causal minute imputation, lag-1 as-of monthly weather, chronological train/validation/test splitting, validation-selected checkpoints, and one direct forecast at a fixed test boundary.
 
