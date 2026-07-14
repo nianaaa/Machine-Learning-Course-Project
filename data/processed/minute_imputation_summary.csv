@@ -1,8 +1,0 @@
-variable,missing_minutes,min_candidates,max_candidates,mean_candidates
-Global_active_power,25979,1,4,3.1733707994918974
-Global_reactive_power,25979,1,4,3.1733707994918974
-Voltage,25979,1,4,3.1733707994918974
-Global_intensity,25979,1,4,3.1733707994918974
-Sub_metering_1,25979,1,4,3.1733707994918974
-Sub_metering_2,25979,1,4,3.1733707994918974
-Sub_metering_3,25979,1,4,3.1733707994918974

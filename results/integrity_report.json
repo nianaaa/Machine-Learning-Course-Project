@@ -1,0 +1,28 @@
+{
+  "status": "pass",
+  "script_sha256": "262f0405845635d3468e66c279066944019588900e257acdc356d6c7680c4fd1",
+  "experiment_signature_sha256": "8e78be2f38d9acfe19d9b02677fb4fe355bb1f6bc1175c82a10ec379655e7971",
+  "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
+  "device": "NVIDIA GeForce RTX 3080",
+  "wall_clock_seconds": 250.01,
+  "metric_rows": 30,
+  "unique_metric_keys": 30,
+  "duplicate_metric_keys": 0,
+  "completed_training_runs": 30,
+  "summary_max_abs_recompute_difference": 3.552713678800501e-15,
+  "prediction_archives": 6,
+  "checkpoints": 30,
+  "figures": 7,
+  "test_windows_per_run": 1,
+  "validation_windows_per_run": 1,
+  "test_origin": "2009-07-10",
+  "weather_lag_months": 1,
+  "weather_mapping_example": {
+    "target_month": 200907,
+    "source_month": 200906,
+    "RR_mm": 65.1
+  },
+  "noncausal_imputation_donors": 0,
+  "same_signature_resume": "pass_all_30_skipped",
+  "changed_lr_resume": "pass_refused_before_training"
+}
