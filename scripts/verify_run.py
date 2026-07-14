@@ -55,6 +55,10 @@ def main() -> None:
     script_hash = sha256_file(script_path)
     require(metadata["script"]["sha256"] == script_hash, "forecasting script hash mismatch")
     require(not (processed_dir / "tes.csv").exists(), "legacy tes.csv still exists")
+    require(
+        not (results_dir / "baseline_metrics.csv").exists(),
+        "obsolete baseline_metrics.csv still exists",
+    )
 
     signature = metadata["experiment_signature"]
     signature_payload = signature["payload"]
@@ -180,76 +184,6 @@ def main() -> None:
     )
     require(max_summary_difference < 1.0e-9, "saved summary does not recompute")
 
-    baseline = pd.read_csv(results_dir / "baseline_metrics.csv")
-    baseline_key_cols = ["method", "horizon", "evaluation_protocol"]
-    require(not baseline.duplicated(baseline_key_cols).any(), "duplicate baseline keys found")
-    require(
-        set(map(tuple, baseline[baseline_key_cols].itertuples(index=False, name=None)))
-        == {("train_month_climatology", horizon, "fixed_holdout") for horizon in horizons},
-        "baseline keys differ from the formal configuration",
-    )
-
-    daily = pd.read_csv(processed_dir / "daily_power.csv", parse_dates=["date"])
-    split_ratio = float(metadata["arguments"]["split_ratio"])
-    validation_days = int(metadata["arguments"]["validation_days"])
-    test_start_idx = int(len(daily) * split_ratio)
-    train_end_idx = test_start_idx - validation_days
-    require(train_end_idx == int(manifest["train_rows"]), "baseline train range differs")
-    require(test_start_idx == int(manifest["train_rows"] + manifest["validation_rows"]), "baseline test origin differs")
-    monthly_means = (
-        pd.DataFrame(
-            {
-                "month": daily["date"].iloc[:train_end_idx].dt.month,
-                "target": daily["Global_active_power"].iloc[:train_end_idx],
-            }
-        )
-        .groupby("month")["target"]
-        .mean()
-    )
-    expected_baseline_rows = []
-    for horizon in horizons:
-        scored = daily.iloc[test_start_idx : test_start_idx + horizon]
-        require(len(scored) == horizon, f"baseline horizon exceeds test data: {horizon}")
-        prediction = scored["date"].dt.month.map(monthly_means).to_numpy(dtype=float)
-        truth = scored["Global_active_power"].to_numpy(dtype=float)
-        require(not np.isnan(prediction).any(), "baseline encountered an unseen month")
-        expected_baseline_rows.append(
-            {
-                "method": "train_month_climatology",
-                "horizon": horizon,
-                "evaluation_protocol": "fixed_holdout",
-                "mse": float(np.mean(np.square(truth - prediction))),
-                "mae": float(np.mean(np.abs(truth - prediction))),
-                "fit_scope": f"train_only_{train_end_idx}_days",
-                "test_start": scored["date"].iloc[0].strftime("%Y-%m-%d"),
-                "test_end": scored["date"].iloc[-1].strftime("%Y-%m-%d"),
-            }
-        )
-    expected_baseline = pd.DataFrame(expected_baseline_rows)
-    baseline_check = baseline.merge(
-        expected_baseline,
-        on=baseline_key_cols,
-        suffixes=("_saved", "_recomputed"),
-        validate="one_to_one",
-    )
-    for field in ["fit_scope", "test_start", "test_end"]:
-        require(
-            (baseline_check[f"{field}_saved"] == baseline_check[f"{field}_recomputed"]).all(),
-            f"baseline {field} differs",
-        )
-    baseline_max_difference = max(
-        float(
-            np.max(
-                np.abs(
-                    baseline_check[f"{field}_saved"].to_numpy(dtype=float)
-                    - baseline_check[f"{field}_recomputed"].to_numpy(dtype=float)
-                )
-            )
-        )
-        for field in ["mse", "mae"]
-    )
-    require(baseline_max_difference < 1.0e-9, "saved baseline does not recompute")
-
     first_seed = seeds[0]
     expected_prediction_files = set()
     for model, horizon in product(model_names, horizons):
@@ -319,7 +253,6 @@ def main() -> None:
         "duplicate_metric_keys": int(runs.duplicated(key_cols).sum()),
         "completed_training_runs": int(metadata["completed_training_runs"]),
         "summary_max_abs_recompute_difference": max_summary_difference,
-        "baseline_max_abs_recompute_difference": baseline_max_difference,
         "prediction_archives": len(actual_prediction_files),
         "checkpoints": len(actual_checkpoints),
         "figures": len(actual_figures),
@@ -335,6 +268,7 @@ def main() -> None:
         "minute_imputation_audit_rows": int(len(audit)),
         "noncausal_imputation_donors": noncausal,
         "ablation_models_present": False,
+        "baseline_metrics_present": False,
         "legacy_tes_csv_present": False,
     }
     output = args.output or results_dir / "integrity_report.json"

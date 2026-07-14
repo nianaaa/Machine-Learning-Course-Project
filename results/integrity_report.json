@@ -1,7 +1,7 @@
 {
   "status": "pass",
-  "script_sha256": "7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8",
-  "experiment_signature_sha256": "ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6",
+  "script_sha256": "4e8f8fdafd8ac66111b5754e2e6a07892e9480f1b9d1102179b465574275c21e",
+  "experiment_signature_sha256": "3e1a56d478a376d7640a377241706690a166b7f3ca3cd8b82e03fe6af516ae5b",
   "signature_bound_data_files": 6,
   "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
   "device": "NVIDIA GeForce RTX 3080",
@@ -10,7 +10,6 @@
   "duplicate_metric_keys": 0,
   "completed_training_runs": 30,
   "summary_max_abs_recompute_difference": 3.552713678800501e-15,
-  "baseline_max_abs_recompute_difference": 0.0,
   "prediction_archives": 6,
   "checkpoints": 30,
   "figures": 6,
@@ -26,5 +25,6 @@
   "minute_imputation_audit_rows": 181853,
   "noncausal_imputation_donors": 0,
   "ablation_models_present": false,
+  "baseline_metrics_present": false,
   "legacy_tes_csv_present": false
 }

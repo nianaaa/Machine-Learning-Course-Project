@@ -8,7 +8,7 @@ This repository implements the three models required by the 2026 professional-ma
 
 Each model is trained independently for direct 90-day and 365-day forecasting. The verified experiment uses five random seeds and a single fixed test origin. The current codebase contains only these three required models; obsolete PVG ablation variants and rolling-origin evaluation are not implemented.
 
-The complete verified results and their limitations are reported in [`EXPERIMENT_RESULTS_ASOF_FIXED.md`](EXPERIMENT_RESULTS_ASOF_FIXED.md). The matching revised course report is available as [`reports/mlearn_power_report_polished_updated.docx`](reports/mlearn_power_report_polished_updated.docx).
+The complete verified three-model results and their limitations are reported in [`EXPERIMENT_RESULTS_ASOF_FIXED.md`](EXPERIMENT_RESULTS_ASOF_FIXED.md). A previously generated course report is retained as [`reports/mlearn_power_report_polished_updated.docx`](reports/mlearn_power_report_polished_updated.docx); this code-only cleanup does not edit that document.
 
 ## Leakage-controlled preprocessing
 
@@ -73,7 +73,7 @@ Processed data are stored in:
 /mnt/sdc/zoujunjie/mlearn_power_coursework/data/processed_causal_asof_lag1_v2
 ```
 
-The three neural models are compared in the result document. A deterministic train-only month-of-year mean baseline is also reported there as a diagnostic. It beats all three neural models on the single 90-day test interval, while PVG-iTransformer modestly beats it on the 365-day interval. Accordingly, the experiment does not support an unconditional claim that a neural model is superior for every horizon.
+The verified result set contains only the three course-required models: LSTM, Transformer, and PVG-iTransformer. No auxiliary baseline or ablation model is implemented or published as a formal result.
 
 ## Reproduce
 
@@ -123,7 +123,7 @@ After the run, verify the complete report-matching artifact set with:
   --run-dir "$RUN"
 ```
 
-The verifier checks the exact three-model run, checkpoint, prediction, and figure sets; recomputes the trained-model summary and train-only baseline; re-hashes the experiment signature and all bound data; verifies strict lag-1 weather mapping and causal minute donors; and rejects ablation or legacy outputs.
+The verifier checks the exact three-model run, checkpoint, prediction, and figure sets; recomputes the trained-model summary; re-hashes the experiment signature and all bound data; verifies strict lag-1 weather mapping and causal minute donors; and rejects auxiliary baseline, ablation, or legacy outputs.
 
 ## Outputs
 
@@ -143,7 +143,6 @@ The repository's top-level formal-run artifacts are:
 - `results/metrics_runs.csv`
 - `results/metrics_summary.csv`
 - `results/run_metadata.json`
-- `results/baseline_metrics.csv`
 - `results/integrity_report.json`
 - `figures/*_fixed_holdout_prediction.png`
 
@@ -151,8 +150,8 @@ The full server run path shown above additionally retains the 30 validation-sele
 
 ## Provenance
 
-- forecasting script SHA-256: `7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8`
-- experiment signature: `ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6`
+- forecasting script SHA-256: `4e8f8fdafd8ac66111b5754e2e6a07892e9480f1b9d1102179b465574275c21e`
+- experiment signature: `3e1a56d478a376d7640a377241706690a166b7f3ca3cd8b82e03fe6af516ae5b`
 - processed split manifest SHA-256: `60b0ed1b283b8f9582bcff1331eb4eee7adec0d6a2eb7182cc39df41e416765d`
 - preprocessing version: `causal_minute_asof_weather_lag1_v2`
 

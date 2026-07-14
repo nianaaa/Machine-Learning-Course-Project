@@ -1,13 +1,13 @@
 {
   "script": {
     "path": "/mnt/sdc/zoujunjie/mlearn_power_coursework/scripts/run_forecasting.py",
-    "sha256": "7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8"
+    "sha256": "4e8f8fdafd8ac66111b5754e2e6a07892e9480f1b9d1102179b465574275c21e"
   },
   "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
   "experiment_signature": {
-    "sha256": "ae5564dd00ec121828f818b7889b19eaff141d2f9691fd6bbdb219c5e78ea2f6",
+    "sha256": "3e1a56d478a376d7640a377241706690a166b7f3ca3cd8b82e03fe6af516ae5b",
     "payload": {
-      "script_sha256": "7e39285ac06adf351b8e00e33a52d9814e7ae9c3a06c07e0071a840bf3688be8",
+      "script_sha256": "4e8f8fdafd8ac66111b5754e2e6a07892e9480f1b9d1102179b465574275c21e",
       "preprocessing_version": "causal_minute_asof_weather_lag1_v2",
       "weather_lag_months": 1,
       "evaluation_protocol": "fixed_holdout",
