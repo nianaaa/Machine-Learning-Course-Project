@@ -59,22 +59,6 @@ The model outputs the complete horizon in one forward pass. No later test observ
 
 This design prevents test-window reuse but has an important limitation: both checkpoint selection and testing represent only one temporal origin per horizon. The standard deviation over seeds measures optimization variability at that origin, not variability across different time periods.
 
-## Verified run
-
-The verified run is:
-
-```text
-/mnt/sdc/zoujunjie/mlearn_power_coursework/runs/fixed_holdout_asof_lag1_v2
-```
-
-Processed data are stored in:
-
-```text
-/mnt/sdc/zoujunjie/mlearn_power_coursework/data/processed_causal_asof_lag1_v2
-```
-
-The result set contains the three course-required models: LSTM, Transformer, and PVG-iTransformer.
-
 ## Reproduce
 
 The experiment used Python 3.10.20, PyTorch 2.4.1+cu118, and an NVIDIA GeForce RTX 3080. Run the following with an empty run directory.
