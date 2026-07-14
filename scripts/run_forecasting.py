@@ -1277,50 +1277,6 @@ def summarize(rows: list[dict]) -> pd.DataFrame:
     return summary
 
 
-def train_only_month_climatology(
-    daily: pd.DataFrame,
-    split_ratio: float,
-    validation_days: int,
-    horizons: list[int],
-) -> pd.DataFrame:
-    test_start_idx = int(len(daily) * split_ratio)
-    train_end_idx = test_start_idx - validation_days
-    dates = pd.to_datetime(daily["date"])
-    target = daily["Global_active_power"].to_numpy(dtype=float)
-    train_months = dates.iloc[:train_end_idx].dt.month
-    monthly_means = (
-        pd.DataFrame({"month": train_months, "target": target[:train_end_idx]})
-        .groupby("month")["target"]
-        .mean()
-    )
-    rows = []
-    for horizon in horizons:
-        end_idx = test_start_idx + int(horizon)
-        if end_idx > len(daily):
-            raise ValueError(
-                f"horizon={horizon} exceeds the fixed test segment of "
-                f"{len(daily) - test_start_idx} days"
-            )
-        scored_dates = dates.iloc[test_start_idx:end_idx]
-        truth = target[test_start_idx:end_idx]
-        prediction = scored_dates.dt.month.map(monthly_means).to_numpy(dtype=float)
-        if np.isnan(prediction).any():
-            raise RuntimeError("Train-only month climatology has an unseen test month")
-        rows.append(
-            {
-                "method": "train_month_climatology",
-                "horizon": int(horizon),
-                "evaluation_protocol": EVALUATION_PROTOCOL,
-                "mse": float(mean_squared_error(truth, prediction)),
-                "mae": float(mean_absolute_error(truth, prediction)),
-                "fit_scope": f"train_only_{train_end_idx}_days",
-                "test_start": scored_dates.iloc[0].strftime("%Y-%m-%d"),
-                "test_end": scored_dates.iloc[-1].strftime("%Y-%m-%d"),
-            }
-        )
-    return pd.DataFrame(rows)
-
-
 def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--base", type=Path, default=Path("/mnt/sdc/zoujunjie"))
@@ -1603,13 +1559,6 @@ def main() -> None:
     summary_df = summarize(results_df.to_dict("records"))
     results_df.to_csv(runs_path, index=False)
     summary_df.to_csv(run_dir / "results" / "metrics_summary.csv", index=False)
-    baseline_df = train_only_month_climatology(
-        daily,
-        split_ratio=args.split_ratio,
-        validation_days=args.validation_days,
-        horizons=list(args.horizons),
-    )
-    baseline_df.to_csv(run_dir / "results" / "baseline_metrics.csv", index=False)
     metadata["runs"] = results_df.to_dict("records")
     metadata["completed_training_runs"] = int(
         results_df[["model_name", "horizon", "seed"]].drop_duplicates().shape[0]
